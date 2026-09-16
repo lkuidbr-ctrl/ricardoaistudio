@@ -1,0 +1,28 @@
+{
+  "name": "ricardoaistudio",
+  "version": "1.0.0",
+  "description": "AI image generation CLI powered by fal.ai",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lkuidbr-ctrl/ricardoaistudio.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lkuidbr-ctrl/ricardoaistudio/issues"
+  },
+  "homepage": "https://github.com/lkuidbr-ctrl/ricardoaistudio#readme",
+  "type": "module",
+  "bin": {
+    "ricardoaistudio": "./bin/generate.js"
+  },
+  "dependencies": {
+    "@fal-ai/client": "^1.10.1",
+    "dotenv": "^17.4.2"
+  }
+}
