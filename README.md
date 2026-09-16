@@ -16,7 +16,7 @@ pip install -r requirements.txt
 export FAL_KEY=your-fal-ai-api-key   # https://fal.ai
 ```
 
-### Usage
+### Usage — command line
 
 ```bash
 # optional: anchor the character's identity to a real photo (image-to-image)
@@ -33,6 +33,23 @@ python run_workflow.py all --reference-photo photos/me.jpg
 # check what's already been generated / locked
 python run_workflow.py status
 ```
+
+### Usage — web UI
+
+A local web app wraps the same pipeline with buttons and live previews, so
+you can paste your `FAL_KEY` in the browser instead of exporting it:
+
+```bash
+python web/app.py
+# open http://127.0.0.1:5000
+```
+
+Paste your key, click "Salvar chave", then trigger each step (personagem,
+locação, sheets, shots 1-7) in order — each button shows live logs while the
+job runs and the generated image/video as soon as it's ready. The key is
+kept only in the running server process's memory; it is never written to
+disk or echoed back by the API. This is a single-user local dev server
+(Flask's built-in one) — don't expose it on a public network as-is.
 
 Generated assets are downloaded into `output/` and tracked in
 `output/project_state.json`. Once `character` and `location` succeed, their

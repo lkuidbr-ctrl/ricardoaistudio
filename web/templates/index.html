@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Character + fal.ai / Muse Workflow</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Character + fal.ai / Muse Workflow</h1>
+    <p>Personagem, locação, sheets e vídeo shot a shot — direto do navegador, usando o pipeline em <code>workflow/</code>.</p>
+  </header>
+
+  <main>
+    <section class="key-panel">
+      <input id="fal_key_input" type="password" placeholder="Cole sua FAL_KEY aqui">
+      <button id="save_key_btn">Salvar chave</button>
+      <span id="key_status"></span>
+    </section>
+
+    <section class="step">
+      <h2>1. Personagem — MASTER_CHARACTER_REFERENCE</h2>
+      <p class="desc">Gera a imagem de referência do personagem (Muse). Opcionalmente, anexe uma foto real para âncora de identidade (image-to-image).</p>
+      <div class="controls">
+        <button id="btn_character">Gerar personagem</button>
+        <input id="character_photo" type="file" accept="image/*">
+        <label class="force"><input id="force_character" type="checkbox"> forçar regeração</label>
+      </div>
+      <pre id="log_character" class="log"></pre>
+      <div id="preview_character_reference" class="preview"><span class="placeholder">Ainda não gerado</span></div>
+    </section>
+
+    <section class="step">
+      <h2>2. Locação — MASTER_LOCATION_REFERENCE</h2>
+      <p class="desc">Gera o estúdio/escritório de referência (Muse).</p>
+      <div class="controls">
+        <button id="btn_location">Gerar locação</button>
+        <label class="force"><input id="force_location" type="checkbox"> forçar regeração</label>
+      </div>
+      <pre id="log_location" class="log"></pre>
+      <div id="preview_location_reference" class="preview"><span class="placeholder">Ainda não gerado</span></div>
+    </section>
+
+    <section class="step">
+      <h2>3. Character sheet</h2>
+      <p class="desc">Usa a referência do personagem travada (precisa rodar o passo 1 antes).</p>
+      <div class="controls">
+        <button id="btn_character_sheet">Gerar character sheet</button>
+        <label class="force"><input id="force_character_sheet" type="checkbox"> forçar regeração</label>
+      </div>
+      <pre id="log_character_sheet" class="log"></pre>
+      <div id="preview_character_sheet" class="preview"><span class="placeholder">Ainda não gerado</span></div>
+    </section>
+
+    <section class="step">
+      <h2>4. Location sheet</h2>
+      <p class="desc">Usa a referência da locação travada (precisa rodar o passo 2 antes).</p>
+      <div class="controls">
+        <button id="btn_location_sheet">Gerar location sheet</button>
+        <label class="force"><input id="force_location_sheet" type="checkbox"> forçar regeração</label>
+      </div>
+      <pre id="log_location_sheet" class="log"></pre>
+      <div id="preview_location_sheet" class="preview"><span class="placeholder">Ainda não gerado</span></div>
+    </section>
+
+    <section class="step">
+      <h2>5-6. Vídeo — shot a shot</h2>
+      <p class="desc">Cada shot usa as referências de personagem e locação travadas, no modelo de vídeo da fal.ai. Gere um, revise, depois o próximo.</p>
+      <div class="shots-grid">
+        {% for n in range(1, 8) %}
+        <div class="shot-card">
+          <h3>SHOT {{ n }}</h3>
+          <div class="controls">
+            <button id="btn_shot_{{ n }}">Gerar</button>
+            <label class="force"><input id="force_shot_{{ n }}" type="checkbox"> forçar</label>
+          </div>
+          <pre id="log_shot_{{ n }}" class="log"></pre>
+          <div id="preview_shot_{{ n }}" class="preview"><span class="placeholder">Ainda não gerado</span></div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
