@@ -12,6 +12,7 @@ Roda **100% no seu computador, de graça**: sem servidor e sem API paga (o Claud
 - **Música de fundo com ducking**: abaixa sozinha enquanto você fala
 - **Efeitos sonoros automáticos**: whoosh nas transições e no B-roll, pop nos emojis, glitch no glitch
 - **Clipes automáticos**: acha os melhores trechos de uma live ou podcast e gera vários shorts, com título-gancho
+- **Voz por IA** (grátis e local): roteiro vira vídeo narrado, ou o seu vídeo vira dublado em outro idioma
 - **Reframe automático**: vídeo horizontal vira 9:16 com uma "câmera" que segue o seu rosto
 - **Zoom automático** (punch-in) nos momentos que você escolher
 - Edição visual no **Remotion Studio** (o painel lateral edita tudo) e exportação em MP4 1080x1920
@@ -130,6 +131,33 @@ Quer caprichar em um clipe? Rode `cut.py`, `enrich.py` e os outros scripts nele,
 qualquer vídeo, e acrescente os campos no `.props.json` (por exemplo `"cuts": "clips/live-1.cuts.json"`).
 A heurística embutida é grátis, mas a IA escolhe trechos e títulos bem melhores.
 
+## Voz por IA: narração e dublagem
+
+Usa o **Piper**, uma voz neural gratuita que roda no seu computador. Na primeira vez, cada
+voz é baixada (~60 MB).
+
+**Narrar um roteiro** (vídeo sem gravar a voz):
+```bash
+python scripts/voz.py narrar public/roteiro.txt                          # fundo em gradiente animado
+python scripts/voz.py narrar public/roteiro.txt --fundo public/fundo.jpg --velocidade 1.1
+python scripts/broll.py public/roteiro.mp4 --ia claude                   # cobre com imagens do Pexels
+```
+Gera `public/roteiro.mp4` e as legendas. As legendas usam o texto exato do roteiro, com os
+tempos medidos pelo Whisper, então nomes e palavras estrangeiras saem certos. Separe
+parágrafos com uma linha em branco para ter pausas maiores.
+
+**Dublar um vídeo seu** em inglês, espanhol, francês, italiano ou alemão:
+```bash
+python scripts/voz.py dublar public/video.mp4 --idioma en                # traduz com o Claude (padrão)
+python scripts/voz.py dublar public/video.mp4 --idioma es --ia ollama --manter-fundo 0.15
+```
+Cada frase é traduzida e falada no mesmo momento da original. Se a tradução ficar mais longa,
+a voz acelera até 1,4x para caber. `--manter-fundo` deixa o áudio original baixinho por
+baixo. Gera `video.en.mp4` com as legendas no novo idioma.
+Troque a voz com `--voz` (por exemplo `pt_BR-cadu-medium`); ouça as opções em
+[rhasspy.github.io/piper-samples](https://rhasspy.github.io/piper-samples/).
+A voz é uma voz pronta, não a sua. Clonar a sua voz exige um serviço pago, como o ElevenLabs.
+
 ## Ajustes rápidos
 
 | Campo | O que faz |
@@ -175,6 +203,7 @@ scripts/
   transcribe.py         Whisper local -> legendas com tempo por palavra
   clips.py              vídeo longo -> vários clipes com título-gancho
   render_all.py         renderiza todos os .props.json de uma pasta
+  voz.py                narração de roteiro e dublagem (Piper)
   cut.py                silêncios e "éé" -> trechos que ficam (video.cuts.json)
   enrich.py             destaques e emojis (dicionário, Ollama ou Claude)
   broll.py              B-roll automático com clipes grátis do Pexels
@@ -186,4 +215,5 @@ scripts/
 ## Licenças
 
 - O Remotion é gratuito para uso individual (veja remotion.dev/license).
-- Whisper, Robust Video Matting, o detector de rostos YuNet (MIT) e as fontes (OFL) são gratuitos.
+- Whisper, Robust Video Matting, o detector de rostos YuNet (MIT), o Piper e as fontes (OFL) são gratuitos.
+  Cada voz do Piper tem a própria licença (veja o arquivo `.onnx.json` ou a página da voz).
