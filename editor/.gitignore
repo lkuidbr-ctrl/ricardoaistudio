@@ -6,3 +6,5 @@ public/*
 !public/sfx/
 __pycache__/
 .venv/
+app/dist/
+app/config.json

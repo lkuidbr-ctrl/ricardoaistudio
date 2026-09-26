@@ -12,7 +12,7 @@ const exists = async (file: string) => {
   return Boolean(res?.ok);
 };
 
-const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = async ({ props }) => {
+export const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = async ({ props }) => {
   for (const [label, file] of [
     ["video", props.video],
     ["captions", props.captions],

@@ -1,27 +1,35 @@
 {
   "name": "ricardo-video-editor",
   "version": "1.0.0",
-  "description": "Editor de vídeos curtos: legendas animadas, zoom e texto atrás da pessoa.",
+  "description": "Editor de v\u00eddeos curtos: legendas animadas, zoom e texto atr\u00e1s da pessoa.",
   "scripts": {
     "studio": "remotion studio",
     "render": "remotion render ShortVideo out/video.mp4",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "app": "node app/server.mjs",
+    "app:build": "vite build --config app/vite.config.mjs"
   },
   "dependencies": {
     "@remotion/captions": "4.0.529",
     "@remotion/cli": "4.0.529",
     "@remotion/fonts": "^4.0.529",
     "@remotion/media-parser": "4.0.529",
+    "@remotion/player": "^4.0.529",
     "@remotion/zod-types": "4.0.529",
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "remotion": "4.0.529",
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
   },
   "private": true
 }

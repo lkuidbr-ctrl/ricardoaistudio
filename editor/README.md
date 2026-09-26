@@ -1,24 +1,49 @@
-# Editor de vídeos curtos (Reels / TikTok / Shorts)
+# Ricardo AI Studio: editor de vídeos curtos (Reels / TikTok / Shorts)
 
-Roda **no seu computador**: sem servidor. As escolhas inteligentes (emojis, B-roll, clipes e
-tradução) usam o **Claude**, com login OAuth pela sua conta. Quem quiser tudo de graça usa
-`--ia ollama` (IA local) ou `--ia dicionario` (sem IA).
+Um programa com **interface visual**, que abre no navegador e roda no seu computador:
+você arrasta o vídeo, clica nos botões das ferramentas de IA, ajusta tudo com
+preview ao vivo e exporta o MP4.
 
-- **Legendas animadas** com destaque palavra a palavra: `hormozi`, `karaoke`, `pop`, `neon`, `minimal`
-- **Emojis e palavras-chave escolhidos por IA**: Claude, Ollama (IA local, grátis) ou dicionário embutido (grátis)
-- **Texto atrás da pessoa**, com as animações `rise`, `scale`, `slide` e `letters`
-- **Corte automático** de silêncios e vícios ("éé", "hã", "hum"), sem estragar o vídeo original
-- **Transições nas emendas dos cortes**: `zoom` (jump cut), `flash`, `whip` (borrão de movimento) e `glitch`
-- **B-roll automático**: a IA escolhe os momentos e baixa clipes grátis do Pexels
-- **B-roll manual**: imagens ou vídeos por cima, em tela cheia ou em cartão flutuante, com entrada `fade`, `slide`, `zoom` ou `glitch`
-- **Música de fundo com ducking**: abaixa sozinha enquanto você fala
-- **Efeitos sonoros automáticos**: whoosh nas transições e no B-roll, pop nos emojis, glitch no glitch
-- **Clipes automáticos**: acha os melhores trechos de uma live ou podcast e gera vários shorts, com título-gancho
-- **Voz por IA** (grátis e local): roteiro vira vídeo narrado, ou o seu vídeo vira dublado em outro idioma
-- **Reframe automático**: vídeo horizontal vira 9:16 com uma "câmera" que segue o seu rosto
-- **Zoom automático** (punch-in) nos momentos que você escolher
-- **Template de marca**: suas cores, fonte, logo, @, barra de progresso e tela final "segue pra mais"
-- Edição visual no **Remotion Studio** (o painel lateral edita tudo) e exportação em MP4 1080x1920
+## Usando o app (recomendado)
+
+1. **Instale** (Windows): dois cliques em `instalar-windows.bat`, na pasta principal do projeto.
+2. **Abra** o atalho **Ricardo AI Studio** na Área de Trabalho. Uma janela preta abre (é o
+   motor do Studio; deixe aberta) e o app aparece no navegador.
+3. **Arraste seu vídeo** para a janela. Vídeos de iPhone (HEVC) são convertidos sozinhos.
+4. Na **coluna da esquerda**, rode as ferramentas na ordem:
+   - **Gerar legendas**: sempre o primeiro passo;
+   - **Cortar silêncios**: tira pausas e "éé";
+   - **Emojis e destaques**: a IA escolhe palavras-chave e emojis;
+   - **B-roll automático**: vídeos grátis do Pexels nos momentos certos;
+   - **Recortar a pessoa**: para o texto ficar atrás de você.
+5. Na **coluna da direita**, ajuste o que quiser. O preview atualiza na hora.
+   - **Legenda**: estilo, cores, posição e palavras em destaque.
+   - **Textos**: título-gancho e texto atrás da pessoa. O botão "+ no momento atual"
+     usa o ponto onde o vídeo está parado.
+   - **Efeitos**: zoom, transição nos cortes e B-roll com os seus arquivos.
+   - **Áudio**: música com volume automático e efeitos sonoros.
+   - **Marca**: cores, logo, @, barra de progresso e tela final.
+6. Clique em **Exportar vídeo**. O arquivo pode ser baixado na hora e também fica salvo
+   em `editor\out`.
+
+Outras opções:
+- **Narrar roteiro**, no topo: cria um vídeo a partir de um texto, com voz por IA.
+- **Gerar clipes**: corta uma live ou um podcast em vários shorts.
+- **Converter para vertical**: transforma um vídeo deitado em 9:16.
+- **Dublar**: dubla o vídeo em inglês, espanhol, francês, italiano ou alemão.
+
+Em **Configurações** você entra na conta do Claude, cola a chave do Pexels e escolhe a IA
+(Claude, Ollama local ou sem IA). Tudo o que você ajusta é salvo sozinho.
+
+> Mac/Linux, ou para desenvolver: `npm install`, `npm run app:build` e `npm run app`
+> (endereço: http://localhost:3210). O modo avançado, com todos os campos do editor e
+> sem as ferramentas de IA, abre com `npm run studio`.
+
+---
+
+## Por dentro (para quem quiser usar pelo terminal)
+
+Tudo o que o app faz também pode ser feito pelos scripts, descritos abaixo.
 
 ## Como funciona o texto atrás da pessoa
 
@@ -46,9 +71,9 @@ os quadros. O recorte é colocado por cima do texto, então o texto parece estar
    No fim, abre o navegador para você entrar na conta do Claude e pede a chave do Pexels
    (opcional).
 4. Pronto: aparecem dois atalhos na Área de Trabalho.
-   - **Editor de Vídeo** abre o editor no navegador.
+   - **Ricardo AI Studio** abre o app visual no navegador.
    - **Terminal do Editor** abre um terminal pronto para rodar os scripts
-     (`python scripts/...`).
+     (`python scripts/...`), para quem quiser usar sem a interface.
 
 Pode rodar o instalador de novo sempre que quiser atualizar: ele pula o que já está instalado.
 
@@ -243,6 +268,9 @@ Com o `y` perto do topo da cabeça, o texto "sai" de trás dela.
 ## Estrutura
 
 ```
+app/
+  server.mjs            servidor local: projetos, ferramentas de IA, exportação
+  src/                  a interface visual (React + preview do Remotion)
 src/
   Root.tsx              composição, props padrão, duração automática pelo vídeo
   ShortVideo.tsx        empilhamento das camadas
