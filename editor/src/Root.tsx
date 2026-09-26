@@ -47,6 +47,8 @@ export const defaultProps: ShortVideoProps = {
   captions: "video.captions.json",
   person: "video.person.webm",
   cuts: "",
+  hookText: "",
+  hookDurationMs: 3000,
   captionStyle: "hormozi",
   captionColor: "#FFFFFF",
   highlightColor: "#FFE600",

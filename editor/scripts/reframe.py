@@ -118,24 +118,29 @@ def main() -> None:
     parser.add_argument("--passo", type=int, default=3, help="procura rosto a cada N quadros")
     parser.add_argument("--largura", type=int, default=1080, help="largura final (altura = largura x 16/9)")
     args = parser.parse_args()
+    out = reframe(args.video, args.folga, args.suavidade, args.passo, args.largura)
+    print(f"-> {out}   (use esse arquivo nos próximos passos)")
 
+
+def reframe(video: Path, folga: float = 0.08, suavidade: float = 1.0, passo: int = 3, largura: int = 1080) -> Path:
+    """Gera <video>.vertical.mp4 seguindo o rosto e devolve o caminho."""
     import cv2
 
-    centros, w, h, fps, n = detectar_centros(args.video, args.passo)
+    centros, w, h, fps, n = detectar_centros(video, passo)
     achados = sum(c is not None for c in centros)
     print(f"rosto encontrado em {achados}/{len(centros)} checagens")
 
     crop_w = min(w, round(h * 9 / 16 / 2) * 2)
-    out_w, out_h = args.largura, round(args.largura * 16 / 9 / 2) * 2
-    cam = caminho_da_camera(centros, args.passo, n, fps, args.folga, args.suavidade)
+    out_w, out_h = largura, round(largura * 16 / 9 / 2) * 2
+    cam = caminho_da_camera(centros, passo, n, fps, folga, suavidade)
     esquerdas = np.clip(np.round(cam * w - crop_w / 2), 0, w - crop_w).astype(int)
 
-    out = output_path(args.video, ".vertical.mp4")
+    out = output_path(video, ".vertical.mp4")
     encoder = subprocess.Popen(
         [
             ffmpeg_exe(), "-y", "-loglevel", "error",
             "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{out_w}x{out_h}", "-r", f"{fps}", "-i", "-",
-            "-i", str(args.video),
+            "-i", str(video),
             "-map", "0:v", "-map", "1:a?",
             "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k", "-shortest",
@@ -143,7 +148,7 @@ def main() -> None:
         ],
         stdin=subprocess.PIPE,
     )
-    cap = cv2.VideoCapture(str(args.video))
+    cap = cv2.VideoCapture(str(video))
     f = 0
     while True:
         ok, frame = cap.read()
@@ -160,7 +165,7 @@ def main() -> None:
     if encoder.wait() != 0:
         raise SystemExit("ffmpeg falhou ao gerar o vídeo vertical")
     print(f"\rrecortando: {f}/{n}")
-    print(f"-> {out}   (use esse arquivo nos próximos passos)")
+    return out
 
 
 if __name__ == "__main__":

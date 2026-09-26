@@ -11,6 +11,7 @@ Roda **100% no seu computador, de graça**: sem servidor e sem API paga (o Claud
 - **B-roll manual**: imagens ou vídeos por cima, em tela cheia ou em cartão flutuante, com entrada `fade`, `slide`, `zoom` ou `glitch`
 - **Música de fundo com ducking**: abaixa sozinha enquanto você fala
 - **Efeitos sonoros automáticos**: whoosh nas transições e no B-roll, pop nos emojis, glitch no glitch
+- **Clipes automáticos**: acha os melhores trechos de uma live ou podcast e gera vários shorts, com título-gancho
 - **Reframe automático**: vídeo horizontal vira 9:16 com uma "câmera" que segue o seu rosto
 - **Zoom automático** (punch-in) nos momentos que você escolher
 - Edição visual no **Remotion Studio** (o painel lateral edita tudo) e exportação em MP4 1080x1920
@@ -110,11 +111,31 @@ pip install -r scripts/requirements.txt
 Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os campos
 `video`, `captions` e `person` no painel. Se não quiser legenda ou recorte, deixe o campo vazio.
 
+## Vídeo longo → vários shorts
+
+```bash
+python scripts/transcribe.py public/live.mp4                     # legendas do vídeo inteiro
+python scripts/clips.py public/live.mp4 --ia claude --quantos 5   # ou --ia ollama, ou sem --ia (heurística)
+python scripts/clips.py public/live.mp4 --vertical                # se a live for horizontal
+python scripts/render_all.py public/clips                         # renderiza todos em out/
+```
+
+O `clips.py` escolhe trechos de 15 a 60 s (ajuste com `--minimo` e `--maximo`) que começam
+com um gancho e não atravessam conversa de bastidor (chat, microfone, "bom dia"). Para cada
+trecho ele gera, em `public/clips/`, o vídeo recortado, as legendas já no tempo do clipe e um
+`.props.json` com o título-gancho. O `render_all.py` renderiza cada `.props.json` da pasta;
+o que não estiver no arquivo usa o padrão do editor.
+
+Quer caprichar em um clipe? Rode `cut.py`, `enrich.py` e os outros scripts nele, como em
+qualquer vídeo, e acrescente os campos no `.props.json` (por exemplo `"cuts": "clips/live-1.cuts.json"`).
+A heurística embutida é grátis, mas a IA escolhe trechos e títulos bem melhores.
+
 ## Ajustes rápidos
 
 | Campo | O que faz |
 |---|---|
 | `cuts` | Arquivo do `cut.py`. **Com cortes, os tempos de `zooms` e `behindTexts` são os do vídeo já cortado** (os mesmos do preview) |
+| `hookText` / `hookDurationMs` | Título-gancho no topo, nos primeiros segundos (o `clips.py` preenche sozinho) |
 | `captionStyle` | `hormozi` (caixa alta, amarelo), `karaoke` (fundo na palavra falada), `pop` (uma palavra por vez, gigante), `neon` (brilho), `minimal` (discreto, com caixa) |
 | `captionY` | Altura da legenda em %. O padrão é 72, acima da interface do TikTok e do Reels |
 | `wordsWindowMs` | Quantas palavras aparecem juntas (maior = mais palavras por tela) |
@@ -147,10 +168,13 @@ src/
   effects/Broll         imagens/vídeos de apoio
   effects/Glitch        separação RGB reaproveitada pelos outros efeitos
   effects/Sound         música com ducking e efeitos sonoros
+  effects/HookTitle     título-gancho do começo
   timeline.ts           converte tempos do original para o vídeo cortado
 scripts/
   reframe.py            horizontal -> vertical seguindo o rosto (YuNet, OpenCV)
   transcribe.py         Whisper local -> legendas com tempo por palavra
+  clips.py              vídeo longo -> vários clipes com título-gancho
+  render_all.py         renderiza todos os .props.json de uma pasta
   cut.py                silêncios e "éé" -> trechos que ficam (video.cuts.json)
   enrich.py             destaques e emojis (dicionário, Ollama ou Claude)
   broll.py              B-roll automático com clipes grátis do Pexels

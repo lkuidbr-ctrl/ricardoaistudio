@@ -6,6 +6,7 @@ import { BehindText } from "./effects/BehindText";
 import { Broll } from "./effects/Broll";
 import { CutTransition } from "./effects/CutTransition";
 import { CutVideo } from "./effects/CutVideo";
+import { HookTitle } from "./effects/HookTitle";
 import { Music, SoundEffects, type SfxEvent } from "./effects/Sound";
 import type { ShortVideoProps } from "./schema";
 import {
@@ -56,8 +57,9 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     if (props.emojis) for (const c of captions ?? []) if (c.emoji) events.push({ frame: at(c.startMs), name: "pop" });
     for (const b of broll) events.push({ frame: at(b.startMs), name: b.transition === "glitch" ? "glitch" : "whoosh" });
     for (const t of props.behindTexts) events.push({ frame: at(t.startMs), name: "swoosh" });
+    if (props.hookText) events.push({ frame: 1, name: "pop" });
     return events;
-  }, [fps, props.cutTransition, props.emojis, props.behindTexts, timeline, captions, broll]);
+  }, [fps, props.cutTransition, props.emojis, props.behindTexts, props.hookText, timeline, captions, broll]);
 
   if (cuts === undefined) return null;
 
@@ -96,6 +98,12 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
       ))}
 
       {captions ? <Captions captions={captions} props={props} /> : null}
+
+      {props.hookText ? (
+        <Sequence durationInFrames={Math.round((props.hookDurationMs / 1000) * fps)}>
+          <HookTitle text={props.hookText} background="white" color="black" />
+        </Sequence>
+      ) : null}
 
       {props.music ? (
         <Music src={props.music} volume={props.musicVolume} duckTo={props.duckTo} speech={captions ?? []} />
