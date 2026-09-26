@@ -94,6 +94,7 @@ try {
     # ---------------------------------------------------------------- Editor (Node)
     Titulo '3/6  Editor (Remotion)'
     Rodar 'npm install' { & npm install --no-fund --no-audit }
+    Rodar 'Preparar a interface' { & npm run app:build }
     Ok 'pacotes do editor instalados'
 
     # ---------------------------------------------------------------- Scripts (Python)
@@ -185,7 +186,7 @@ try {
     $desktop = [Environment]::GetFolderPath('Desktop')
     $shell = New-Object -ComObject WScript.Shell
     foreach ($atalho in @(
-        @{ Nome = 'Editor de Vídeo'; Alvo = 'abrir-editor.bat'; Descricao = 'Abre o editor no navegador' },
+        @{ Nome = 'Ricardo AI Studio'; Alvo = 'abrir-editor.bat'; Descricao = 'Abre o editor de vídeos no navegador' },
         @{ Nome = 'Terminal do Editor'; Alvo = 'terminal-editor.bat'; Descricao = 'Terminal pronto para rodar os scripts' }
     )) {
         $lnk = $shell.CreateShortcut((Join-Path $desktop "$($atalho.Nome).lnk"))
@@ -194,14 +195,15 @@ try {
         $lnk.Description = $atalho.Descricao
         $lnk.Save()
     }
-    Ok 'atalhos criados na Área de Trabalho: "Editor de Vídeo" e "Terminal do Editor"'
+    # Remove o atalho antigo (versão sem interface visual)
+    Remove-Item (Join-Path $desktop 'Editor de Vídeo.lnk') -ErrorAction SilentlyContinue
+    Ok 'atalho "Ricardo AI Studio" criado na Área de Trabalho'
+
 
     Write-Host ''
     Write-Host '  Tudo pronto!' -ForegroundColor Green
-    Write-Host '  1. Coloque seu vídeo em editor\public\video.mp4'
-    Write-Host '  2. Abra o "Terminal do Editor" e rode:  python scripts/transcribe.py public/video.mp4'
-    Write-Host '  3. Abra o "Editor de Vídeo" (abre no navegador)'
-    Write-Host '  O passo a passo completo está em editor\README.md'
+    Write-Host '  Abra o atalho "Ricardo AI Studio" na Área de Trabalho e arraste seu vídeo para a janela.'
+    Write-Host '  Ele abre no navegador; deixe a janela preta aberta enquanto estiver usando.'
     Write-Host ''
     exit 0
 } catch {

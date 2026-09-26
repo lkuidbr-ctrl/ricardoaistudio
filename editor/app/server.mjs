@@ -1,0 +1,524 @@
+// Servidor local do Ricardo AI Studio: serve a interface visual e roda as ferramentas
+// (scripts Python e renderização do Remotion) no seu computador.
+// Inicie com:  npm run app   (ou pelo atalho "Editor de Vídeo" da Área de Trabalho)
+
+import { spawn, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import express from "express";
+import multer from "multer";
+
+const APP = path.dirname(fileURLToPath(import.meta.url));
+const EDITOR = path.dirname(APP);
+const PUBLIC = path.join(EDITOR, "public");
+const OUT = path.join(EDITOR, "out");
+const DIST = path.join(APP, "dist");
+const CONFIG = path.join(APP, "config.json");
+const PORT = Number(process.env.PORT || 3210);
+const WIN = process.platform === "win32";
+
+fs.mkdirSync(PUBLIC, { recursive: true });
+fs.mkdirSync(OUT, { recursive: true });
+
+// ------------------------------------------------------------------ utilidades
+
+const VIDEO_EXT = new Set([".mp4", ".mov", ".webm", ".mkv", ".m4v"]);
+const PASTAS_IGNORADAS = new Set(["broll", "fonts", "sfx", "uploads"]);
+
+const lerJson = (arquivo, padrao) => {
+  try {
+    return JSON.parse(fs.readFileSync(arquivo, "utf-8"));
+  } catch {
+    return padrao;
+  }
+};
+const salvarJson = (arquivo, dados) => fs.writeFileSync(arquivo, JSON.stringify(dados, null, 1), "utf-8");
+
+// "clips/live-1.mp4" -> caminho absoluto dentro de public/ (sem deixar sair da pasta).
+const noPublic = (rel) => {
+  const abs = path.resolve(PUBLIC, rel);
+  if (abs !== PUBLIC && !abs.startsWith(PUBLIC + path.sep)) throw new Error("caminho inválido");
+  return abs;
+};
+const relPublic = (abs) => path.relative(PUBLIC, abs).split(path.sep).join("/");
+// "clips/live-1.mp4" + ".captions.json" -> "clips/live-1.captions.json"
+const irmao = (rel, sufixo) => rel.replace(/\.[^./]+$/, "") + sufixo;
+
+const nomeSeguro = (nome) =>
+  nome
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase() || "arquivo";
+
+const semColisao = (pasta, nome) => {
+  const ext = path.extname(nome);
+  const base = nome.slice(0, nome.length - ext.length);
+  let candidato = nome;
+  for (let i = 2; fs.existsSync(path.join(pasta, candidato)); i++) candidato = `${base}-${i}${ext}`;
+  return candidato;
+};
+
+const config = () => lerJson(CONFIG, {});
+
+const pythonExe = () => {
+  if (process.env.EDITOR_PYTHON) return process.env.EDITOR_PYTHON;
+  const venv = WIN ? path.join(EDITOR, ".venv", "Scripts", "python.exe") : path.join(EDITOR, ".venv", "bin", "python");
+  if (fs.existsSync(venv)) return venv;
+  return WIN ? "python" : "python3";
+};
+
+// ------------------------------------------------------------------ projetos
+
+// Arquivos que as ferramentas geram ao lado do vídeo e o campo do editor que cada um alimenta.
+const GERADOS = {
+  captions: ".captions.json",
+  cuts: ".cuts.json",
+  person: ".person.webm",
+  brollFile: ".broll.json",
+};
+
+const listarProjetos = () => {
+  const projetos = [];
+  const varrer = (pasta, profundidade) => {
+    for (const item of fs.readdirSync(pasta, { withFileTypes: true })) {
+      const abs = path.join(pasta, item.name);
+      if (item.isDirectory()) {
+        if (profundidade < 2 && !PASTAS_IGNORADAS.has(item.name) && !item.name.startsWith(".")) varrer(abs, profundidade + 1);
+        continue;
+      }
+      if (!VIDEO_EXT.has(path.extname(item.name).toLowerCase()) || item.name.endsWith(".person.webm")) continue;
+      const rel = relPublic(abs);
+      const st = fs.statSync(abs);
+      projetos.push({ id: rel, nome: item.name, pasta: path.dirname(rel) === "." ? "" : path.dirname(rel), tamanho: st.size, modificado: st.mtimeMs });
+    }
+  };
+  varrer(PUBLIC, 0);
+  return projetos.sort((a, b) => b.modificado - a.modificado);
+};
+
+const arquivosDoProjeto = (id) => {
+  const a = Object.fromEntries(Object.entries(GERADOS).map(([campo, suf]) => [campo, fs.existsSync(noPublic(irmao(id, suf)))]));
+  // "Emojis e destaques" não cria arquivo: marca as palavras dentro da legenda.
+  const legenda = a.captions ? lerJson(noPublic(irmao(id, ".captions.json")), []) : [];
+  a.emojis = legenda.some((w) => w.emoji || w.highlight);
+  return a;
+};
+
+const configuracoesDoProjeto = (id) => {
+  const salvo = lerJson(noPublic(irmao(id, ".settings.json")), null);
+  // Clipes gerados pelo clips.py trazem um .props.json com título-gancho etc.
+  const base = salvo ?? lerJson(noPublic(irmao(id, ".props.json")), {});
+  const cfg = { ...base, video: id };
+  for (const [campo, suf] of Object.entries(GERADOS)) {
+    if (cfg[campo] === undefined && fs.existsSync(noPublic(irmao(id, suf)))) cfg[campo] = irmao(id, suf);
+  }
+  return cfg;
+};
+
+const salvarConfiguracoes = (id, cfg) => salvarJson(noPublic(irmao(id, ".settings.json")), { ...cfg, video: id });
+
+// ------------------------------------------------------------------ tarefas (scripts e render)
+
+const tarefas = new Map();
+
+const novaTarefa = (tipo, projeto, rotulo) => {
+  const t = { id: randomUUID(), tipo, projeto, rotulo, status: "rodando", linhas: [], progresso: null, resultado: null, inicio: Date.now() };
+  tarefas.set(t.id, t);
+  return t;
+};
+
+const registrar = (t, texto) => {
+  // Os scripts usam "\r" para atualizar a mesma linha (ex.: "30/300 quadros").
+  for (const pedaco of texto.split(/\n/)) {
+    const partes = pedaco.split("\r").filter((p) => p.trim() !== "");
+    if (!partes.length) continue;
+    const ultima = partes[partes.length - 1].replace(/\x1b\[[0-9;]*m/g, "").trimEnd();
+    t.linhas.push(ultima);
+    if (t.tipo === "exportar") {
+      // Remotion: "Bundling 40%" -> "Rendered 120/380" (85% da barra) -> "Encoded 300/380" (15%).
+      const r = ultima.match(/Rendered (\d+)\/(\d+)/);
+      const e = ultima.match(/Encoded (\d+)\/(\d+)/);
+      if (r) t.progresso = (Number(r[1]) / Number(r[2])) * 0.85;
+      else if (e) t.progresso = 0.85 + (Number(e[1]) / Number(e[2])) * 0.15;
+      continue;
+    }
+    if (t.tipo === "converter") {
+      const tempo = ultima.match(/time=(\d+):(\d+):([\d.]+)/);
+      if (tempo && t.duracaoS) t.progresso = Math.min(1, (Number(tempo[1]) * 3600 + Number(tempo[2]) * 60 + Number(tempo[3])) / t.duracaoS);
+      continue;
+    }
+    const m = ultima.match(/(\d+)\s*\/\s*(\d+)/);
+    if (m && Number(m[2]) > 0) t.progresso = Math.min(1, Number(m[1]) / Number(m[2]));
+  }
+  if (t.linhas.length > 400) t.linhas.splice(0, t.linhas.length - 400);
+};
+
+const rodar = (t, exe, args, { env = {}, aoTerminar } = {}) => {
+  registrar(t, `▶ ${path.basename(exe)} ${args.map((a) => path.basename(String(a))).join(" ")}`);
+  const proc = spawn(exe, args, {
+    cwd: EDITOR,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1", FORCE_COLOR: "0", ...env },
+    windowsHide: true,
+  });
+  t.proc = proc;
+  proc.stdout.on("data", (d) => registrar(t, d.toString("utf-8")));
+  proc.stderr.on("data", (d) => registrar(t, d.toString("utf-8")));
+  proc.on("error", (err) => {
+    registrar(t, `Não consegui iniciar: ${err.message}`);
+    t.status = "erro";
+  });
+  proc.on("close", (codigo) => {
+    t.proc = null;
+    if (t.status === "cancelado") return;
+    if (codigo === 0) {
+      try {
+        t.resultado = aoTerminar ? aoTerminar() ?? null : null;
+        t.status = "ok";
+        t.progresso = 1;
+      } catch (err) {
+        registrar(t, `Erro depois de terminar: ${err.message}`);
+        t.status = "erro";
+      }
+    } else {
+      t.status = "erro";
+    }
+    t.fim = Date.now();
+  });
+};
+
+const py = (script) => path.join(EDITOR, "scripts", script);
+const REMOTION_CLI = path.join(EDITOR, "node_modules", "@remotion", "cli", "remotion-cli.js");
+
+// ffprobe/ffmpeg que já vêm com o Remotion (não precisa instalar nada).
+const ffprobe = (abs, entrada) => {
+  const r = spawnSync(
+    process.execPath,
+    [REMOTION_CLI, "ffprobe", "-v", "error", ...entrada, "-of", "csv=p=0", abs],
+    { encoding: "utf-8", windowsHide: true },
+  );
+  return (r.stdout || "").trim().split(/\r?\n/).filter(Boolean).pop() ?? "";
+};
+
+// O Chrome/Edge no Windows não tocam HEVC (padrão do iPhone) nem alguns formatos antigos.
+const COMPATIVEIS = new Set((process.env.STUDIO_COMPATIVEIS || "h264,vp8,vp9,av1").split(","));
+const precisaConverter = (abs) => {
+  const codec = ffprobe(abs, ["-select_streams", "v:0", "-show_entries", "stream=codec_name"]);
+  return !COMPATIVEIS.has(codec) || [".mkv", ".avi"].includes(path.extname(abs).toLowerCase());
+};
+
+// Cada ferramenta: rótulo, argumentos do script e o que muda no projeto quando termina.
+const FERRAMENTAS = {
+  transcrever: {
+    rotulo: "Gerar legendas",
+    args: (v, o) => [py("transcribe.py"), v, "--model", o.modelo || "small"],
+    campo: "captions",
+  },
+  cortar: {
+    rotulo: "Cortar silêncios",
+    args: (v, o) => [py("cut.py"), v, "--max-silence", String(o.maxSilencio ?? 350)],
+    campo: "cuts",
+  },
+  emojis: {
+    rotulo: "Emojis e destaques",
+    args: (v, o) => [py("enrich.py"), v, "--ia", o.ia || "claude"],
+    extra: () => ({ emojis: true }),
+  },
+  broll: {
+    rotulo: "B-roll automático",
+    args: (v, o) => [py("broll.py"), v, "--ia", o.ia || "claude"],
+    campo: "brollFile",
+  },
+  recortar: {
+    rotulo: "Recortar a pessoa",
+    args: (v) => [py("segment.py"), v],
+    campo: "person",
+  },
+  reframe: {
+    rotulo: "Converter para vertical",
+    args: (v) => [py("reframe.py"), v],
+    novo: (id) => irmao(id, ".vertical.mp4"),
+  },
+  dublar: {
+    rotulo: "Dublar",
+    args: (v, o) => [py("voz.py"), "dublar", v, "--idioma", o.idioma || "en", "--ia", o.ia || "claude"],
+    novo: (id, o) => irmao(id, `.${o.idioma || "en"}.mp4`),
+  },
+  clipes: {
+    rotulo: "Gerar clipes",
+    args: (v, o) => {
+      const a = [py("clips.py"), v, "--quantos", String(o.quantos || 3), "--ia", o.ia || "claude"];
+      if (o.vertical) a.push("--vertical");
+      if (fs.existsSync(path.join(PUBLIC, "marca.json"))) a.push("--marca", "marca.json");
+      return a;
+    },
+    clipes: true,
+  },
+};
+
+const precisaLegenda = new Set(["cortar", "emojis", "broll", "clipes", "dublar"]);
+
+// ------------------------------------------------------------------ servidor
+
+const app = express();
+app.use(express.json({ limit: "5mb" }));
+
+app.get("/api/projetos", (_req, res) => res.json(listarProjetos()));
+
+app.get("/api/projeto", (req, res) => {
+  const id = String(req.query.id || "");
+  if (!fs.existsSync(noPublic(id))) return res.status(404).json({ erro: "vídeo não encontrado" });
+  res.json({ id, arquivos: arquivosDoProjeto(id), configuracoes: configuracoesDoProjeto(id) });
+});
+
+app.put("/api/projeto", (req, res) => {
+  const id = String(req.query.id || "");
+  if (!fs.existsSync(noPublic(id))) return res.status(404).json({ erro: "vídeo não encontrado" });
+  salvarConfiguracoes(id, req.body || {});
+  res.json({ ok: true });
+});
+
+app.delete("/api/projeto", (req, res) => {
+  const id = String(req.query.id || "");
+  const base = noPublic(id).replace(/\.[^./\\]+$/, "");
+  for (const suf of ["", ".captions.json", ".cuts.json", ".person.webm", ".broll.json", ".settings.json", ".props.json"]) {
+    const alvo = suf ? base + suf : noPublic(id);
+    fs.rmSync(alvo, { force: true });
+  }
+  res.json({ ok: true });
+});
+
+// Upload de vídeos (viram projetos) e de arquivos de apoio (música, imagens, logo...).
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const pasta = req.query.tipo === "video" ? PUBLIC : path.join(PUBLIC, "uploads");
+      fs.mkdirSync(pasta, { recursive: true });
+      cb(null, pasta);
+    },
+    filename: (req, file, cb) => {
+      const original = Buffer.from(file.originalname, "latin1").toString("utf-8");
+      const pasta = req.query.tipo === "video" ? PUBLIC : path.join(PUBLIC, "uploads");
+      cb(null, semColisao(pasta, nomeSeguro(original)));
+    },
+  }),
+});
+app.post("/api/upload", upload.single("arquivo"), (req, res) => {
+  if (!req.file) return res.status(400).json({ erro: "nenhum arquivo" });
+  const caminho = relPublic(req.file.path);
+  if (req.query.tipo !== "video" || !precisaConverter(req.file.path)) return res.json({ caminho });
+
+  // Converte para um formato que qualquer navegador toca, com barra de progresso.
+  const vp9 = process.env.STUDIO_CODEC_ALVO === "vp9"; // só para testes automatizados
+  const ext = vp9 ? ".webm" : ".mp4";
+  const base = path.basename(req.file.path).replace(/\.[^.]+$/, "");
+  const destino = path.join(PUBLIC, semColisao(PUBLIC, `${base}${ext}`));
+  const t = novaTarefa("converter", null, "Preparando o vídeo");
+  t.duracaoS = Number(ffprobe(req.file.path, ["-show_entries", "format=duration"])) || 0;
+  const codec = vp9
+    ? ["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-row-mt", "1", "-deadline", "realtime", "-cpu-used", "8", "-c:a", "libopus"]
+    : ["-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"];
+  rodar(t, process.execPath, [REMOTION_CLI, "ffmpeg", "-y", "-hide_banner", "-i", req.file.path, ...codec, destino], {
+    aoTerminar: () => {
+      fs.rmSync(req.file.path, { force: true });
+      return { novoProjeto: relPublic(destino) };
+    },
+  });
+  res.json({ caminho, tarefa: t.id });
+});
+
+app.get("/api/uploads", (_req, res) => {
+  const pasta = path.join(PUBLIC, "uploads");
+  const itens = fs.existsSync(pasta) ? fs.readdirSync(pasta).map((n) => `uploads/${n}`) : [];
+  res.json(itens);
+});
+
+// Ferramentas de IA
+app.post("/api/tarefas", (req, res) => {
+  const { ferramenta, projeto, opcoes = {} } = req.body || {};
+  const f = FERRAMENTAS[ferramenta];
+  if (!f) return res.status(400).json({ erro: "ferramenta desconhecida" });
+  if (!fs.existsSync(noPublic(projeto))) return res.status(404).json({ erro: "vídeo não encontrado" });
+  if (precisaLegenda.has(ferramenta) && !fs.existsSync(noPublic(irmao(projeto, ".captions.json")))) {
+    return res.status(400).json({ erro: "Gere as legendas primeiro (botão \"Gerar legendas\")." });
+  }
+  const t = novaTarefa(ferramenta, projeto, f.rotulo);
+  const env = config().pexelsKey ? { PEXELS_API_KEY: config().pexelsKey } : {};
+  rodar(t, pythonExe(), f.args(noPublic(projeto), opcoes), {
+    env,
+    aoTerminar: () => {
+      if (f.campo || f.extra) {
+        const cfg = configuracoesDoProjeto(projeto);
+        if (f.campo) cfg[f.campo] = irmao(projeto, GERADOS[f.campo]);
+        Object.assign(cfg, f.extra?.() ?? {});
+        salvarConfiguracoes(projeto, cfg);
+      }
+      if (f.novo) return { novoProjeto: f.novo(projeto, opcoes) };
+      if (f.clipes) {
+        const stem = path.basename(projeto).replace(/\.[^.]+$/, "");
+        const resumo = lerJson(path.join(PUBLIC, "clips", `${stem}-clipes.json`), []);
+        return { clipes: resumo.map((c) => ({ ...c, id: `clips/${c.clipe}.mp4` })) };
+      }
+      return null;
+    },
+  });
+  res.json({ id: t.id });
+});
+
+// Narração: texto digitado vira um vídeo novo.
+app.post("/api/narrar", (req, res) => {
+  const { titulo = "roteiro", texto = "", velocidade = 1, fundo = "" } = req.body || {};
+  if (!texto.trim()) return res.status(400).json({ erro: "Escreva o roteiro primeiro." });
+  const pasta = path.join(PUBLIC, "roteiros");
+  fs.mkdirSync(pasta, { recursive: true });
+  const nome = semColisao(pasta, nomeSeguro(titulo) + ".txt");
+  const txt = path.join(pasta, nome);
+  fs.writeFileSync(txt, texto, "utf-8");
+  const t = novaTarefa("narrar", null, "Narrar roteiro");
+  const args = [py("voz.py"), "narrar", txt, "--velocidade", String(velocidade)];
+  if (fundo) args.push("--fundo", noPublic(fundo));
+  rodar(t, pythonExe(), args, {
+    aoTerminar: () => {
+      const id = `roteiros/${nome.replace(/\.txt$/, ".mp4")}`;
+      salvarConfiguracoes(id, { ...configuracoesDoProjeto(id), captionStyle: "pop", captionY: 50 });
+      return { novoProjeto: id };
+    },
+  });
+  res.json({ id: t.id });
+});
+
+// Exportar o vídeo final (Remotion)
+app.post("/api/exportar", (req, res) => {
+  const { projeto, props } = req.body || {};
+  if (!fs.existsSync(noPublic(projeto))) return res.status(404).json({ erro: "vídeo não encontrado" });
+  salvarConfiguracoes(projeto, props);
+  const nome = semColisao(OUT, path.basename(projeto).replace(/\.[^.]+$/, "") + "-final.mp4");
+  const propsArq = path.join(OUT, `.${nome}.props.json`);
+  salvarJson(propsArq, { ...props, video: projeto });
+  const t = novaTarefa("exportar", projeto, "Exportar vídeo");
+  const args = [REMOTION_CLI, "render", "ShortVideo", path.join(OUT, nome), `--props=${propsArq}`];
+  if (process.env.REMOTION_BROWSER) args.push(`--browser-executable=${process.env.REMOTION_BROWSER}`);
+  rodar(t, process.execPath, args, {
+    aoTerminar: () => {
+      fs.rmSync(propsArq, { force: true });
+      return { arquivo: `/out/${encodeURIComponent(nome)}`, nome };
+    },
+  });
+  res.json({ id: t.id });
+});
+
+app.get("/api/tarefas/:id", (req, res) => {
+  const t = tarefas.get(req.params.id);
+  if (!t) return res.status(404).json({ erro: "tarefa não encontrada" });
+  const desde = Number(req.query.desde || 0);
+  res.json({
+    id: t.id,
+    tipo: t.tipo,
+    rotulo: t.rotulo,
+    projeto: t.projeto,
+    status: t.status,
+    progresso: t.progresso,
+    resultado: t.resultado,
+    total: t.linhas.length,
+    linhas: t.linhas.slice(desde),
+  });
+});
+
+app.get("/api/tarefas", (_req, res) =>
+  res.json([...tarefas.values()].map(({ proc, linhas, ...t }) => ({ ...t, ultima: linhas[linhas.length - 1] ?? "" }))),
+);
+
+app.post("/api/tarefas/:id/cancelar", (req, res) => {
+  const t = tarefas.get(req.params.id);
+  if (t?.proc) {
+    t.status = "cancelado";
+    if (WIN) spawnSync("taskkill", ["/pid", String(t.proc.pid), "/T", "/F"]);
+    else t.proc.kill("SIGTERM");
+  }
+  res.json({ ok: true });
+});
+
+// Marca, configurações e login do Claude
+app.get("/api/marca", (_req, res) => {
+  const arq = path.join(PUBLIC, "marca.json");
+  const exemplo = lerJson(path.join(EDITOR, "exemplos", "marca.json"), {});
+  res.json({ existe: fs.existsSync(arq), marca: lerJson(arq, { ...exemplo, logo: "" }) });
+});
+app.put("/api/marca", (req, res) => {
+  salvarJson(path.join(PUBLIC, "marca.json"), req.body || {});
+  res.json({ ok: true });
+});
+
+app.get("/api/config", (_req, res) => {
+  const c = config();
+  res.json({ temPexels: Boolean(c.pexelsKey) });
+});
+app.put("/api/config", (req, res) => {
+  const c = config();
+  if (typeof req.body?.pexelsKey === "string") c.pexelsKey = req.body.pexelsKey.trim();
+  salvarJson(CONFIG, c);
+  res.json({ ok: true });
+});
+
+const antExe = () => {
+  const local = WIN ? path.join(process.env.LOCALAPPDATA || "", "Programs", "ant", "ant.exe") : null;
+  return local && fs.existsSync(local) ? local : "ant";
+};
+app.get("/api/claude", (_req, res) => {
+  const r = spawnSync(antExe(), ["auth", "status"], { encoding: "utf-8", timeout: 15000, windowsHide: true });
+  if (r.error) return res.json({ instalado: false, texto: "A ferramenta de login (ant) não está instalada. Rode o instalador." });
+  res.json({ instalado: true, texto: `${r.stdout || ""}${r.stderr || ""}`.trim() });
+});
+app.post("/api/claude/login", (_req, res) => {
+  const t = novaTarefa("login", null, "Entrar no Claude");
+  rodar(t, antExe(), ["auth", "login"]);
+  res.json({ id: t.id });
+});
+
+// Arquivos: vídeos exportados, interface e a pasta public/ (o preview do Remotion usa "/arquivo").
+app.use("/out", express.static(OUT, { setHeaders: (res) => res.setHeader("Cache-Control", "no-store") }));
+app.use(express.static(DIST));
+app.use(express.static(PUBLIC, { setHeaders: (res) => res.setHeader("Cache-Control", "no-cache") }));
+app.use((req, res) => {
+  if (req.path.startsWith("/api/")) return res.status(404).json({ erro: "rota não encontrada" });
+  res.sendFile(path.join(DIST, "index.html"));
+});
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ erro: err.message });
+});
+
+// ------------------------------------------------------------------ inicialização
+
+const abrirNavegador = (url) => {
+  if (process.env.NO_OPEN) return;
+  const [cmd, args] = WIN ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
+  spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: true }).on("error", () => {}).unref();
+};
+
+const iniciar = async () => {
+  if (!fs.existsSync(path.join(DIST, "index.html")) || process.env.REBUILD) {
+    console.log("Preparando a interface (só na primeira vez)...");
+    const { build } = await import("vite");
+    await build({ configFile: path.join(APP, "vite.config.mjs"), logLevel: "warn" });
+  }
+  const url = `http://localhost:${PORT}`;
+  const servidor = app.listen(PORT, "127.0.0.1", () => {
+    console.log(`\n  Ricardo AI Studio rodando em ${url}`);
+    console.log("  Deixe esta janela aberta enquanto estiver usando. Para fechar, feche a janela.\n");
+    abrirNavegador(url);
+  });
+  servidor.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.log(`O Studio já está aberto; abrindo ${url}`);
+      abrirNavegador(url);
+      setTimeout(() => process.exit(0), 500);
+    } else throw err;
+  });
+};
+
+iniciar();

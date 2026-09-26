@@ -1,16 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { continueRender, delayRender, staticFile } from "remotion";
 
 // Carrega um JSON de public/. Enquanto carrega devolve undefined;
 // se o campo estiver vazio ou o arquivo falhar, devolve null.
 export const useJson = <T,>(file: string): T | null | undefined => {
   const [data, setData] = useState<T | null | undefined>(undefined);
-  const [handle] = useState(() => delayRender(`Carregando ${file || "(vazio)"}`));
+  // O primeiro carregamento segura a renderização desde o início; os seguintes
+  // (quando o arquivo muda no preview do app) pedem uma espera nova.
+  const [primeiraEspera] = useState(() => delayRender(`Carregando ${file || "(vazio)"}`));
+  const primeira = useRef(true);
 
   useEffect(() => {
+    const espera = primeira.current ? primeiraEspera : delayRender(`Carregando ${file || "(vazio)"}`);
+    primeira.current = false;
+    let vivo = true;
     if (!file) {
       setData(null);
-      continueRender(handle);
+      continueRender(espera);
       return;
     }
     fetch(staticFile(file))
@@ -18,13 +24,16 @@ export const useJson = <T,>(file: string): T | null | undefined => {
         if (!r.ok) throw new Error(`Arquivo não encontrado: public/${file}`);
         return r.json();
       })
-      .then((json: T) => setData(json))
+      .then((json: T) => vivo && setData(json))
       .catch((err) => {
         console.error(err);
-        setData(null);
+        if (vivo) setData(null);
       })
-      .finally(() => continueRender(handle));
-  }, [file, handle]);
+      .finally(() => continueRender(espera));
+    return () => {
+      vivo = false;
+    };
+  }, [file, primeiraEspera]);
 
   return data;
 };
