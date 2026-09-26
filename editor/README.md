@@ -1,6 +1,6 @@
 # Editor de vídeos curtos (Reels / TikTok / Shorts)
 
-Roda **100% no seu computador, de graça**: nenhuma API paga e nenhum servidor.
+Roda **100% no seu computador, de graça**: sem servidor e sem API paga (o Claude no `enrich.py` é opcional).
 
 - **Legendas animadas** com destaque palavra a palavra: `hormozi`, `karaoke`, `pop`, `neon`, `minimal`
 - **Emojis e palavras-chave escolhidos por IA**: dicionário embutido (grátis), Ollama (IA local, grátis) ou Claude
