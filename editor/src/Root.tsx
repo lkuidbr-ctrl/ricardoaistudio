@@ -53,6 +53,8 @@ export const defaultProps: ShortVideoProps = {
   keywords: [],
   emojis: true,
   zooms: [{ atMs: 2000, durationMs: 1500, scale: 1.25 }],
+  cutTransition: "zoom",
+  broll: [],
   behindTexts: [
     {
       text: "RICARDO",

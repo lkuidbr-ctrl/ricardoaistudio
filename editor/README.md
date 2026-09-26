@@ -6,13 +6,16 @@ Roda **100% no seu computador, de graça**: nenhuma API paga e nenhum servidor.
 - **Emojis e palavras-chave escolhidos por IA**: dicionário embutido (grátis), Ollama (IA local, grátis) ou Claude
 - **Texto atrás da pessoa**, com as animações `rise`, `scale`, `slide` e `letters`
 - **Corte automático** de silêncios e vícios ("éé", "hã", "hum"), sem estragar o vídeo original
+- **Transições nas emendas dos cortes**: `zoom` (jump cut), `flash`, `whip` (borrão de movimento) e `glitch`
+- **B-roll**: imagens ou vídeos por cima, em tela cheia ou em cartão flutuante, com entrada `fade`, `slide`, `zoom` ou `glitch`
 - **Zoom automático** (punch-in) nos momentos que você escolher
 - Edição visual no **Remotion Studio** (o painel lateral edita tudo) e exportação em MP4 1080x1920
 
 ## Como funciona o texto atrás da pessoa
 
 ```
-camada 4  legendas                 (sempre na frente)
+camada 5  legendas e emojis        (sempre na frente)
+camada 4  B-roll                   (tela cheia ou cartão)
 camada 3  pessoa recortada         <- video.person.webm (fundo transparente, gerado por IA)
 camada 2  TEXTO GIGANTE            <- fica escondido atrás da pessoa
 camada 1  vídeo original
@@ -92,6 +95,8 @@ Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os
 | `wordsWindowMs` | Quantas palavras aparecem juntas (maior = mais palavras por tela) |
 | `keywords` | Palavras extras que sempre ficam com a cor de destaque (somam às do `enrich.py`) |
 | `emojis` | Liga e desliga os emojis do `enrich.py` |
+| `cutTransition` | Efeito em cada emenda do corte: `none`, `zoom` (alterna perto/longe, o clássico do YouTube), `flash`, `whip`, `glitch`. Precisa do `cuts` |
+| `broll` | Coloque a imagem ou o vídeo em `public/` e informe `src`, `startMs`, `durationMs`, `mode` (`full` ou `pip`) e `transition`. Imagens ganham zoom lento (Ken Burns); o áudio do B-roll fica mudo |
 | `zooms` | `atMs` (quando), `durationMs` (por quanto tempo), `scale` (1.2 = 20% de zoom) |
 | `behindTexts` | `y` em % da altura (20-30 fica atrás da cabeça), `fontSize` de 250 a 400 para o efeito ficar bom |
 
@@ -109,6 +114,9 @@ src/
   effects/BehindText    texto atrás da pessoa
   effects/AutoZoom      zoom punch-in
   effects/CutVideo      toca só os trechos mantidos (jump cut)
+  effects/CutTransition efeitos nas emendas (zoom, flash, whip, glitch)
+  effects/Broll         imagens/vídeos de apoio
+  effects/Glitch        separação RGB reaproveitada pelos outros efeitos
   timeline.ts           converte tempos do original para o vídeo cortado
 scripts/
   transcribe.py         Whisper local -> legendas com tempo por palavra
