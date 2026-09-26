@@ -15,6 +15,7 @@ Roda **100% no seu computador, de graça**: sem servidor e sem API paga (o Claud
 - **Voz por IA** (grátis e local): roteiro vira vídeo narrado, ou o seu vídeo vira dublado em outro idioma
 - **Reframe automático**: vídeo horizontal vira 9:16 com uma "câmera" que segue o seu rosto
 - **Zoom automático** (punch-in) nos momentos que você escolher
+- **Template de marca**: suas cores, fonte, logo, @, barra de progresso e tela final "segue pra mais"
 - Edição visual no **Remotion Studio** (o painel lateral edita tudo) e exportação em MP4 1080x1920
 
 ## Como funciona o texto atrás da pessoa
@@ -112,6 +113,21 @@ pip install -r scripts/requirements.txt
 Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os campos
 `video`, `captions` e `person` no painel. Se não quiser legenda ou recorte, deixe o campo vazio.
 
+## Sua marca em todos os vídeos
+
+Copie `exemplos/marca.json` para `public/marca.json`, ajuste e preencha o campo `brand` no
+Studio com `marca.json`. A marca aplica:
+
+- **cor principal** nos destaques da legenda, no título-gancho, na barra de progresso e no botão;
+- **logo** (ou o seu @) como marca d'água no canto, a partir do fim do gancho;
+- **fonte própria** (`"fonte": "fonts/MinhaFonte.woff2"`, com o arquivo em `public/fonts/`)
+  no gancho, na marca d'água e na tela final;
+- **barra de progresso** no topo, que ajuda a pessoa a ver até o fim;
+- **tela final** "segue pra mais", com o seu @ e um botão de seguir que é "clicado", com som.
+
+Dá para ter várias marcas (`marca-podcast.json`, `marca-cliente.json`) e trocar pelo campo.
+Nos clipes em lote: `python scripts/clips.py public/live.mp4 --marca marca.json`.
+
 ## Vídeo longo → vários shorts
 
 ```bash
@@ -163,6 +179,7 @@ A voz é uma voz pronta, não a sua. Clonar a sua voz exige um serviço pago, co
 | Campo | O que faz |
 |---|---|
 | `cuts` | Arquivo do `cut.py`. **Com cortes, os tempos de `zooms` e `behindTexts` são os do vídeo já cortado** (os mesmos do preview) |
+| `brand` | Arquivo da marca em `public/` (veja `exemplos/marca.json`) |
 | `hookText` / `hookDurationMs` | Título-gancho no topo, nos primeiros segundos (o `clips.py` preenche sozinho) |
 | `captionStyle` | `hormozi` (caixa alta, amarelo), `karaoke` (fundo na palavra falada), `pop` (uma palavra por vez, gigante), `neon` (brilho), `minimal` (discreto, com caixa) |
 | `captionY` | Altura da legenda em %. O padrão é 72, acima da interface do TikTok e do Reels |
@@ -197,6 +214,11 @@ src/
   effects/Glitch        separação RGB reaproveitada pelos outros efeitos
   effects/Sound         música com ducking e efeitos sonoros
   effects/HookTitle     título-gancho do começo
+  effects/BrandOverlay  marca d'água, barra de progresso e tela final
+  brand.ts              leitura e validação do marca.json
+exemplos/
+  marca.json            modelo de marca para copiar em public/
+  roteiro.txt           modelo de roteiro para o voz.py narrar
   timeline.ts           converte tempos do original para o vídeo cortado
 scripts/
   reframe.py            horizontal -> vertical seguindo o rosto (YuNet, OpenCV)

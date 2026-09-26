@@ -44,6 +44,8 @@ export const shortVideoSchema = z.object({
   // Gerado por scripts/cut.py (silêncios e "éé" removidos). Vazio = vídeo inteiro.
   // Zooms e textos usam o tempo do vídeo JÁ cortado (o que você vê no preview).
   cuts: z.string(),
+  // Arquivo da sua marca em public/ (cores, fonte, logo, @, tela final). Vazio = sem marca.
+  brand: z.string(),
   // Título-gancho no começo do vídeo (o clips.py preenche sozinho). Vazio = sem título.
   hookText: z.string(),
   hookDurationMs: z.number().min(500).max(10000),

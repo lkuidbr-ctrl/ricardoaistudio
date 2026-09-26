@@ -4,10 +4,11 @@ import { montserrat } from "../fonts";
 
 // Título-gancho nos primeiros segundos ("O erro que me custou 10 mil").
 // Deve ficar dentro de uma <Sequence> com a duração do gancho.
-export const HookTitle: React.FC<{ text: string; background: string; color: string }> = ({
+export const HookTitle: React.FC<{ text: string; background: string; color: string; fontFamily?: string }> = ({
   text,
   background,
   color,
+  fontFamily = montserrat,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -28,7 +29,7 @@ export const HookTitle: React.FC<{ text: string; background: string; color: stri
           borderRadius: 24,
           background,
           color,
-          fontFamily: montserrat,
+          fontFamily,
           fontWeight: 900,
           fontSize: 68,
           lineHeight: 1.1,

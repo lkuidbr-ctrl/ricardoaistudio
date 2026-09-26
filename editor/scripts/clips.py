@@ -5,7 +5,7 @@ Uso:
     python scripts/transcribe.py public/live.mp4          # antes: legendas do vídeo longo
     python scripts/clips.py public/live.mp4                # heurística embutida (grátis)
     python scripts/clips.py public/live.mp4 --ia claude    # ou --ia ollama: escolhas bem melhores
-    python scripts/clips.py public/live.mp4 --quantos 5 --vertical
+    python scripts/clips.py public/live.mp4 --quantos 5 --vertical --marca marca.json
 
 Para cada clipe gera, em public/clips/:
     live-1.mp4               o trecho recortado (com --vertical, já em 9:16 seguindo o rosto)
@@ -150,6 +150,7 @@ def main() -> None:
     parser.add_argument("--minimo", type=float, default=15, help="duração mínima de cada clipe (s)")
     parser.add_argument("--maximo", type=float, default=60, help="duração máxima de cada clipe (s)")
     parser.add_argument("--vertical", action="store_true", help="converte cada clipe para 9:16 seguindo o rosto")
+    parser.add_argument("--marca", default="", help='arquivo da marca em public/ (ex.: "marca.json")')
     args = parser.parse_args()
 
     captions_file = output_path(args.video, ".captions.json")
@@ -217,6 +218,8 @@ def main() -> None:
             "zooms": [],
             "hookText": c["titulo"],
         }
+        if args.marca:
+            props["brand"] = args.marca
         (pasta / f"{nome}.props.json").write_text(json.dumps(props, ensure_ascii=False, indent=1), encoding="utf-8")
         resumo.append({"clipe": nome, "nota": c["nota"], "titulo": c["titulo"], "inicioMs": inicio_ms, "fimMs": fim_ms})
 

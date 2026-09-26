@@ -1,6 +1,8 @@
 import React, { useMemo } from "react";
 import { AbsoluteFill, Sequence, useVideoConfig } from "remotion";
+import { useBrand } from "./brand";
 import { Captions } from "./captions/Captions";
+import { BrandOverlay, EndCard } from "./effects/BrandOverlay";
 import { AutoZoom } from "./effects/AutoZoom";
 import { BehindText } from "./effects/BehindText";
 import { Broll } from "./effects/Broll";
@@ -32,6 +34,14 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
   const rawCaptions = useJson<EnrichedCaption[]>(props.captions);
   const cuts = useJson<CutsFile>(props.cuts);
   const autoBroll = useJson<AutoBroll[]>(props.brollFile);
+  const brand = useBrand(props.brand);
+  const hookFrames = props.hookText ? Math.round((props.hookDurationMs / 1000) * fps) : 0;
+  const ctaFrames = brand ? Math.min(durationInFrames, Math.round((brand.cta.duracaoMs / 1000) * fps)) : 0;
+  // A cor principal da marca vira a cor de destaque das legendas.
+  const captionProps = useMemo(
+    () => (brand ? { ...props, highlightColor: brand.corPrincipal } : props),
+    [brand, props],
+  );
 
   const timeline = useMemo(
     // Com cortes, a composição já tem a duração editada; sem cortes, é o vídeo inteiro.
@@ -58,10 +68,14 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     for (const b of broll) events.push({ frame: at(b.startMs), name: b.transition === "glitch" ? "glitch" : "whoosh" });
     for (const t of props.behindTexts) events.push({ frame: at(t.startMs), name: "swoosh" });
     if (props.hookText) events.push({ frame: 1, name: "pop" });
+    if (ctaFrames > 0) {
+      events.push({ frame: durationInFrames - ctaFrames, name: "whoosh" });
+      events.push({ frame: durationInFrames - ctaFrames + 38, name: "pop" }); // "clique" no seguir
+    }
     return events;
-  }, [fps, props.cutTransition, props.emojis, props.behindTexts, props.hookText, timeline, captions, broll]);
+  }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.hookText, timeline, captions, broll]);
 
-  if (cuts === undefined) return null;
+  if (cuts === undefined || brand === undefined) return null;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
@@ -97,11 +111,23 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
         </Sequence>
       ))}
 
-      {captions ? <Captions captions={captions} props={props} /> : null}
+      {captions ? <Captions captions={captions} props={captionProps} /> : null}
+
+      {brand ? <BrandOverlay brand={brand} hideUntilFrame={hookFrames} /> : null}
 
       {props.hookText ? (
-        <Sequence durationInFrames={Math.round((props.hookDurationMs / 1000) * fps)}>
-          <HookTitle text={props.hookText} background="white" color="black" />
+        <Sequence durationInFrames={hookFrames}>
+          {brand ? (
+            <HookTitle text={props.hookText} background={brand.corPrincipal} color={brand.corFundo} fontFamily={brand.fontFamily} />
+          ) : (
+            <HookTitle text={props.hookText} background="white" color="black" />
+          )}
+        </Sequence>
+      ) : null}
+
+      {brand && ctaFrames > 0 ? (
+        <Sequence from={durationInFrames - ctaFrames} durationInFrames={ctaFrames}>
+          <EndCard brand={brand} />
         </Sequence>
       ) : null}
 
