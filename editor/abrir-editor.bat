@@ -1,7 +1,7 @@
 @echo off
 rem Abre o Ricardo AI Studio (interface visual) no navegador.
+rem A logica fica no iniciar.ps1 (este arquivo nao muda nas atualizacoes).
 cd /d "%~dp0"
 title Ricardo AI Studio
-echo Abrindo o Ricardo AI Studio... (deixe esta janela aberta enquanto estiver usando)
-call npm run app
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0iniciar.ps1"
 pause

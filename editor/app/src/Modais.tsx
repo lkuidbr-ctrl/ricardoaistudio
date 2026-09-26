@@ -106,7 +106,14 @@ export const ModalConfig: React.FC<{
   setIa: (v: Ia) => void;
   aoLogin: (id: string) => void;
   tarefaLogin?: Tarefa;
-}> = ({ fechar, ia, setIa, aoLogin, tarefaLogin }) => {
+  aoAtualizar: (id: string) => void;
+  tarefaAtualizar?: Tarefa;
+}> = ({ fechar, ia, setIa, aoLogin, tarefaLogin, aoAtualizar, tarefaAtualizar }) => {
+  const [versao, setVersao] = useState<{ versao: string | null; git: boolean } | null>(null);
+  const [erroAtualizar, setErroAtualizar] = useState("");
+  useEffect(() => {
+    get<{ versao: string | null; git: boolean }>("/api/versao").then(setVersao).catch(() => {});
+  }, [tarefaAtualizar?.status]);
   const [claude, setClaude] = useState<{ instalado: boolean; texto: string } | null>(null);
   const [temPexels, setTemPexels] = useState(false);
   const [chave, setChave] = useState("");
@@ -150,6 +157,41 @@ export const ModalConfig: React.FC<{
         <p className="dica">O login abre no navegador. Depois de entrar, volte para cá.</p>
         <pre className="log">{claude ? claude.texto || "(sem resposta)" : "Verificando..."}</pre>
         {tarefaLogin && tarefaLogin.linhas.length ? <pre className="log">{tarefaLogin.linhas.slice(-8).join("\n")}</pre> : null}
+      </section>
+
+      <section className="secao">
+        <header>
+          <h3>Atualizações</h3>
+          <button
+            className="botao primario pequeno"
+            disabled={tarefaAtualizar?.status === "rodando" || versao?.git === false}
+            onClick={async () => {
+              setErroAtualizar("");
+              try {
+                const { id } = await enviar<{ id: string }>("POST", "/api/atualizar");
+                aoAtualizar(id);
+              } catch (e) {
+                setErroAtualizar((e as Error).message);
+              }
+            }}
+          >
+            {tarefaAtualizar?.status === "rodando" ? "Buscando..." : "Buscar atualização"}
+          </button>
+        </header>
+        <p className="dica">
+          Baixa só o que mudou e reinicia o Studio sozinho. Na primeira vez, o GitHub pode pedir para você entrar na sua conta
+          (o projeto é privado).
+          {versao?.versao ? <> Versão atual: <b>{versao.versao}</b>.</> : null}
+        </p>
+        {versao?.git === false ? <p className="alerta">Falta o Git. Rode o instalar-windows.bat uma vez para ativar as atualizações.</p> : null}
+        {erroAtualizar ? <p className="erro">{erroAtualizar}</p> : null}
+        {tarefaAtualizar?.status === "ok" && !tarefaAtualizar.resultado?.atualizado ? <p className="ok-texto">Você já tem a versão mais nova.</p> : null}
+        {tarefaAtualizar?.status === "erro" ? (
+          <>
+            {tarefaAtualizar.dica ? <p className="alerta">{tarefaAtualizar.dica}</p> : null}
+            <pre className="log">{tarefaAtualizar.linhas.slice(-8).join("\n")}</pre>
+          </>
+        ) : null}
       </section>
 
       <section className="secao">

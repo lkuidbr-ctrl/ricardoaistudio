@@ -8,3 +8,4 @@ __pycache__/
 .venv/
 app/dist/
 app/config.json
+.estado-instalacao.json
