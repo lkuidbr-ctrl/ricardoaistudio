@@ -75,7 +75,16 @@ os quadros. O recorte é colocado por cima do texto, então o texto parece estar
    - **Terminal do Editor** abre um terminal pronto para rodar os scripts
      (`python scripts/...`), para quem quiser usar sem a interface.
 
-Pode rodar o instalador de novo sempre que quiser atualizar: ele pula o que já está instalado.
+**Para atualizar**, não precisa baixar o ZIP de novo: no app, abra **Configurações → Buscar
+atualização**. Ele baixa só o que mudou, instala só o que precisa e reabre sozinho
+(normalmente em menos de 1 minuto). Na primeira vez, o GitHub pode pedir para você entrar na
+sua conta, porque o projeto é privado. O instalador também pode ser rodado de novo: ele
+anota o que já instalou e pula o que não mudou.
+
+**Placa de vídeo:** o instalador só usa a placa NVIDIA se ela tiver 4 GB ou mais de memória.
+Placas menores ou antigas (como a GTX 750 Ti) rendem pouco e costumam dar erro; nesse caso
+o processador faz o trabalho. Se a placa falhar no meio de uma tarefa, o Studio continua
+sozinho no processador.
 
 ### Mac / Linux (ou Windows manual)
 

@@ -1,6 +1,9 @@
 ﻿# Instalador do editor de vídeos para Windows.
 # Rode com dois cliques no "instalar-windows.bat" (na pasta principal do projeto).
 # Pode rodar de novo quantas vezes quiser: ele pula o que já está instalado e atualiza o resto.
+# Com -Atualizacao (usado pelo botão "Buscar atualização" do app) ele não faz perguntas.
+
+param([switch]$Atualizacao)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'  # deixa os downloads bem mais rápidos no PowerShell 5
@@ -16,6 +19,33 @@ function Aviso([string]$texto) { Write-Host "    !!  $texto" -ForegroundColor Ye
 function Atualizar-Path {
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
                 [Environment]::GetEnvironmentVariable('Path', 'User')
+}
+
+# Lembra o que já foi instalado (por "impressão digital" dos arquivos) para pular
+# o que não mudou. Fica em editor\.estado-instalacao.json.
+$ArquivoEstado = Join-Path $Editor '.estado-instalacao.json'
+$Estado = @{}
+if (Test-Path $ArquivoEstado) {
+    try {
+        (Get-Content $ArquivoEstado -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $Estado[$_.Name] = $_.Value }
+    } catch {
+        $Estado = @{}  # arquivo corrompido: refaz tudo
+    }
+}
+function Impressao([string[]]$caminhos) {
+    $arquivos = foreach ($c in $caminhos) {
+        $alvo = Join-Path $Editor $c
+        if (Test-Path $alvo -PathType Container) { Get-ChildItem $alvo -Recurse -File | Sort-Object FullName }
+        elseif (Test-Path $alvo) { Get-Item $alvo }
+    }
+    $partes = ($arquivos | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash }) -join ''
+    $sha = [Security.Cryptography.SHA256]::Create()
+    return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($partes))) -replace '-', ''
+}
+function JaFeito([string]$chave, [string]$impressao) { return $Estado[$chave] -eq $impressao }
+function MarcarFeito([string]$chave, [string]$impressao) {
+    $Estado[$chave] = $impressao
+    $Estado | ConvertTo-Json | Set-Content $ArquivoEstado -Encoding UTF8
 }
 
 function Rodar([string]$descricao, [scriptblock]$comando) {
@@ -62,6 +92,15 @@ try {
     Get-ChildItem -Path (Split-Path $Editor -Parent) -Recurse -Include *.ps1, *.bat -ErrorAction SilentlyContinue |
         Unblock-File -ErrorAction SilentlyContinue
 
+    try {
+        $livre = (Get-PSDrive -Name $Editor.Substring(0, 1)).Free
+        if ($livre -lt 10GB) {
+            Aviso ("Só {0:N0} GB livres no disco. A instalação usa uns 5 GB e cada vídeo exportado ocupa espaço." -f ($livre / 1GB))
+        }
+    } catch {
+        $livre = $null  # não deu para medir o disco; segue a instalação
+    }
+
     # ---------------------------------------------------------------- Node.js
     Titulo '1/6  Node.js'
     $nodeOk = $false
@@ -93,9 +132,22 @@ try {
 
     # ---------------------------------------------------------------- Editor (Node)
     Titulo '3/6  Editor (Remotion)'
-    Rodar 'npm install' { & npm install --no-fund --no-audit }
-    Rodar 'Preparar a interface' { & npm run app:build }
-    Ok 'pacotes do editor instalados'
+    $impNpm = Impressao @('package.json', 'package-lock.json')
+    if ((Test-Path (Join-Path $Editor 'node_modules')) -and (JaFeito 'npm' $impNpm)) {
+        Ok 'pacotes do editor já instalados'
+    } else {
+        Rodar 'npm install' { & npm install --no-fund --no-audit }
+        MarcarFeito 'npm' $impNpm
+        Ok 'pacotes do editor instalados'
+    }
+    $impApp = Impressao @('app\src', 'app\vite.config.mjs', 'src', 'package-lock.json')
+    if ((Test-Path (Join-Path $Editor 'app\dist\index.html')) -and (JaFeito 'interface' $impApp)) {
+        Ok 'interface já preparada'
+    } else {
+        Rodar 'Preparar a interface' { & npm run app:build }
+        MarcarFeito 'interface' $impApp
+        Ok 'interface preparada'
+    }
 
     # ---------------------------------------------------------------- Scripts (Python)
     Titulo '4/6  Scripts de IA (Whisper, recorte, voz...)'
@@ -103,27 +155,75 @@ try {
     if (-not (Test-Path $venvPy)) {
         Rodar 'Criar o ambiente Python' { & $pyExe @pyArgs -m venv (Join-Path $Editor '.venv') }
     }
-    Rodar 'Atualizar o pip' { & $venvPy -m pip install --upgrade pip --quiet }
+    if (-not $Estado['pip-atualizado']) {
+        Rodar 'Atualizar o pip' { & $venvPy -m pip install --upgrade pip --quiet }
+        MarcarFeito 'pip-atualizado' 'sim'
+    }
 
-    $nvidia = $false
+    # Placa NVIDIA só compensa com 4 GB ou mais de memória de vídeo. Placas menores/antigas
+    # (ex.: GTX 750 Ti, 2 GB) rendem pouco e costumam falhar; o processador faz o mesmo
+    # trabalho e ainda economiza ~2 GB de download e de disco.
+    $memoriaNvidia = 0
     try {
-        $nvidia = [bool](Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match 'NVIDIA' })
+        # O valor do registro é exato; o AdapterRAM do WMI trava em 4 GB, mas serve de reserva.
+        $chaves = Get-ItemProperty 'HKLM:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*' -ErrorAction SilentlyContinue |
+            Where-Object { "$($_.DriverDesc)" -match 'NVIDIA' }
+        foreach ($c in $chaves) {
+            $q = $c.'HardwareInformation.qwMemorySize'
+            if ($q) { $memoriaNvidia = [Math]::Max($memoriaNvidia, [double]$q) }
+        }
+        if (-not $memoriaNvidia) {
+            Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match 'NVIDIA' } |
+                ForEach-Object { $memoriaNvidia = [Math]::Max($memoriaNvidia, [double]$_.AdapterRAM) }
+        }
     } catch {
-        $nvidia = $false  # sem como detectar a placa: usa a versão para processador, que sempre funciona
+        $memoriaNvidia = 0  # sem como detectar a placa: usa a versão para processador, que sempre funciona
     }
-    if ($nvidia) {
-        Write-Host '    Placa NVIDIA encontrada: instalando o PyTorch com aceleração (download grande, ~2,5 GB)...'
+    $gbPlaca = [Math]::Round($memoriaNvidia / 1GB, 1)
+    if ($memoriaNvidia -ge 3.5GB) {
+        Write-Host "    Placa NVIDIA com $gbPlaca GB: instalando o PyTorch com aceleração (download grande, ~2,5 GB)..."
         $indice = 'https://download.pytorch.org/whl/cu126'
+        $querCuda = $true
     } else {
-        Write-Host '    Sem placa NVIDIA: instalando o PyTorch para processador (~200 MB)...'
+        if ($memoriaNvidia -gt 0) {
+            Write-Host "    Placa NVIDIA com só $gbPlaca GB: vou usar o processador, que rende igual e é mais estável."
+        }
+        Write-Host '    Instalando o PyTorch para processador (~200 MB)...'
         $indice = 'https://download.pytorch.org/whl/cpu'
+        $querCuda = $false
     }
-    Rodar 'Instalar o PyTorch' { & $venvPy -m pip install torch torchvision --index-url $indice }
-    Rodar 'Instalar os scripts' { & $venvPy -m pip install -r (Join-Path $Editor 'scripts\requirements.txt') }
-    Ok 'scripts de IA instalados'
+
+    # PyTorch: instala se não houver; troca se for do tipo errado (ex.: CUDA de uma
+    # instalação antiga numa placa fraca); se já estiver certo, não mexe (economiza minutos).
+    $atual = & $venvPy -c "import torch, torchvision; print('cuda' if torch.version.cuda else 'cpu')" 2>$null
+    $mexeu = $false
+    if ($LASTEXITCODE -ne 0 -or -not $atual) {
+        Rodar 'Instalar o PyTorch' { & $venvPy -m pip install torch torchvision --index-url $indice }
+        $mexeu = $true
+    } elseif (($atual -eq 'cuda') -ne $querCuda) {
+        Write-Host "    Trocando o PyTorch ($atual) pela versão certa para este computador..."
+        Rodar 'Trocar o PyTorch' { & $venvPy -m pip install --force-reinstall --no-deps torch torchvision --index-url $indice }
+        $mexeu = $true
+    } else {
+        Ok "PyTorch ($atual) já instalado"
+    }
+
+    $impPip = Impressao @('scripts\requirements.txt')
+    if (JaFeito 'pip' $impPip) {
+        Ok 'scripts de IA já instalados'
+    } else {
+        Rodar 'Instalar os scripts' { & $venvPy -m pip install -r (Join-Path $Editor 'scripts\requirements.txt') }
+        MarcarFeito 'pip' $impPip
+        $mexeu = $true
+        Ok 'scripts de IA instalados'
+    }
+    if ($mexeu) {
+        # Os instaladores baixados ficam guardados no cache do pip (podem passar de 2 GB): apaga.
+        & $venvPy -m pip cache purge 2>$null | Out-Null
+    }
 
     # ---------------------------------------------------------------- ant (login do Claude)
-    Titulo '5/6  Login no Claude (ferramenta "ant")'
+    Titulo '5/6  Login no Claude e atualizações'
     $pastaAnt = Join-Path $env:LOCALAPPDATA 'Programs\ant'
     if (-not (Get-Command ant -ErrorAction SilentlyContinue)) {
         $arq = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
@@ -156,6 +256,22 @@ try {
         Atualizar-Path
     }
     Ok "ant $(& ant --version)"
+
+    # Git: usado pelo botão "Buscar atualização" do app (baixa só o que mudou).
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Winget-Instalar 'Git.Git' 'Git'
+    }
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        Ok "$(& git --version)"
+    } else {
+        Aviso 'Não consegui instalar o Git; o botão de atualizar do app não vai funcionar.'
+    }
+
+    if ($Atualizacao) {
+        Write-Host ''
+        Write-Host '  Atualização concluída! Abrindo o Studio de novo...' -ForegroundColor Green
+        exit 0
+    }
 
     if ([Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User') -or [Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'Machine')) {
         Aviso 'Existe uma ANTHROPIC_API_KEY no seu Windows: ela passa na frente do login.'
@@ -209,6 +325,7 @@ try {
 } catch {
     Write-Host ''
     Write-Host "  ERRO: $($_.Exception.Message)" -ForegroundColor Red
+    if ($Atualizacao) { Write-Host '  O Studio vai abrir mesmo assim; se algo não funcionar, rode o instalar-windows.bat.' }
     Write-Host '  Tire um print desta janela e mande para o Claude que ele ajuda a resolver.'
     Write-Host ''
     exit 1

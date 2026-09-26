@@ -14,6 +14,8 @@ export type Tarefa = {
     arquivo?: string;
     nome?: string;
     clipes?: { id: string; titulo: string; nota: number; inicioMs: number; fimMs: number }[];
+    atualizado?: boolean;
+    versao?: string | null;
   };
   linhas: string[];
   dica?: string | null; // explicação do erro, quando o servidor reconhece o problema

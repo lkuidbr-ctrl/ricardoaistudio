@@ -61,6 +61,7 @@ export const App: React.FC = () => {
   const [arrastando, setArrastando] = useState(false);
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [menuAberto, setMenuAberto] = useState(false);
+  const [reiniciando, setReiniciando] = useState(false);
   const player = useRef<PlayerRef>(null);
   // Tarefas já tratadas: a verificação periódica pode ver o fim da mesma tarefa mais de uma vez.
   const finalizadas = useRef(new Set<string>());
@@ -150,6 +151,10 @@ export const App: React.FC = () => {
         return;
       }
       if (t.tipo === "exportar") return; // o modal de exportação mostra o resultado
+      if (t.tipo === "atualizar") {
+        if (t.resultado?.atualizado) setReiniciando(true);
+        return; // "já está na versão mais nova" aparece nas Configurações
+      }
       if (t.tipo === "login") {
         avisar("Login no Claude concluído.");
         return;
@@ -189,6 +194,22 @@ export const App: React.FC = () => {
     },
     [avisar, carregarProjetos, abrirProjeto, mudar],
   );
+
+  // Depois de atualizar, o Studio fecha, instala o que mudou e abre de novo:
+  // espera ele voltar com a versão nova e recarrega a página.
+  useEffect(() => {
+    if (!reiniciando) return;
+    let caiu = false;
+    const intervalo = setInterval(async () => {
+      try {
+        await get("/api/versao");
+        if (caiu) window.location.reload();
+      } catch {
+        caiu = true;
+      }
+    }, 2000);
+    return () => clearInterval(intervalo);
+  }, [reiniciando]);
 
   const rodando = useMemo(() => Object.values(tarefas).filter((t) => t.status === "rodando"), [tarefas]);
 
@@ -438,6 +459,16 @@ export const App: React.FC = () => {
           </div>
         ))}
 
+      {reiniciando ? (
+        <div className="modal-fundo">
+          <div className="modal">
+            <h2>Atualizando o Studio...</h2>
+            <p className="dica">Baixei a versão nova. Agora o Studio instala o que mudou e reabre sozinho; esta página recarrega quando ele voltar (normalmente menos de 1 minuto).</p>
+            <div className="barra grande"><i className="indeterminada" /></div>
+          </div>
+        </div>
+      ) : null}
+
       {arrastando ? (
         <div className="cortina">
           <div>Solte o vídeo para adicionar</div>
@@ -470,6 +501,8 @@ export const App: React.FC = () => {
           setIa={setIa}
           aoLogin={(id) => acompanhar(id, "Entrar no Claude", "login", null)}
           tarefaLogin={Object.values(tarefas).filter((t) => t.tipo === "login").pop()}
+          aoAtualizar={(id) => acompanhar(id, "Atualizar o Studio", "atualizar", null)}
+          tarefaAtualizar={Object.values(tarefas).filter((t) => t.tipo === "atualizar").pop()}
         />
       ) : null}
       {modal === "exportar" && exportacao && tarefas[exportacao] ? (

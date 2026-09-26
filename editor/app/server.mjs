@@ -12,6 +12,10 @@ import multer from "multer";
 
 const APP = path.dirname(fileURLToPath(import.meta.url));
 const EDITOR = path.dirname(APP);
+const RAIZ = path.dirname(EDITOR); // pasta do projeto inteiro (onde fica o .git)
+const REPO_URL = process.env.STUDIO_REPO || "https://github.com/lkuidbr-ctrl/ricardoaistudio.git";
+// Código de saída que avisa o iniciar.ps1: "atualizei, instale o que mudou e me abra de novo".
+const SAIR_PARA_ATUALIZAR = 42;
 const PUBLIC = path.join(EDITOR, "public");
 const OUT = path.join(EDITOR, "out");
 const DIST = path.join(APP, "dist");
@@ -169,16 +173,19 @@ const DIAGNOSTICOS = [
   [/No space left on device|espaço insuficiente|There is not enough space/i, "O disco está cheio. Libere espaço e tente de novo."],
   [/Invalid data found|moov atom not found|Não consegui abrir/i, "O arquivo de vídeo parece estar corrompido. Tente exportar/baixar o vídeo de novo."],
   [/Não achei .*captions\.json|Gere as legendas/i, "Gere as legendas primeiro."],
+  [/Authentication failed|could not read Username|Repository not found|terminal prompts disabled/i,
+    "Entre na sua conta do GitHub na janela que abrir (o projeto é privado) e clique em atualizar de novo."],
+  [/spawn git ENOENT|'git' não é reconhecido/i, "Falta o Git para atualizar. Rode o instalar-windows.bat uma vez (ele instala o Git)."],
 ];
 const diagnosticar = (linhas) => {
   const texto = linhas.slice(-60).join("\n");
   return DIAGNOSTICOS.find(([re]) => re.test(texto))?.[1] ?? null;
 };
 
-const rodar = (t, exe, args, { env = {}, aoTerminar } = {}) => {
+const rodar = (t, exe, args, { env = {}, aoTerminar, cwd = EDITOR } = {}) => {
   registrar(t, `▶ ${path.basename(exe)} ${args.map((a) => path.basename(String(a))).join(" ")}`);
   const proc = spawn(exe, args, {
-    cwd: EDITOR,
+    cwd,
     env: {
       ...process.env,
       PYTHONIOENCODING: "utf-8",
@@ -203,9 +210,9 @@ const rodar = (t, exe, args, { env = {}, aoTerminar } = {}) => {
     if (t.status === "cancelado") return;
     if (codigo === 0) {
       try {
-        t.resultado = aoTerminar ? aoTerminar() ?? null : null;
         t.status = "ok";
         t.progresso = 1;
+        t.resultado = aoTerminar ? aoTerminar() ?? null : null;
       } catch (err) {
         registrar(t, `Erro depois de terminar: ${err.message}`);
         t.status = "erro";
@@ -215,6 +222,23 @@ const rodar = (t, exe, args, { env = {}, aoTerminar } = {}) => {
       t.dica = diagnosticar(t.linhas);
     }
     t.fim = Date.now();
+  });
+};
+
+// Roda vários comandos em sequência na mesma tarefa; para no primeiro que falhar.
+const rodarSequencia = (t, passos, { aoTerminar, cwd } = {}) => {
+  const [primeiro, ...resto] = passos;
+  const proximo = resto.length ? () => rodarSequencia(t, resto, { aoTerminar, cwd }) : aoTerminar;
+  rodar(t, primeiro.exe, primeiro.args, {
+    cwd,
+    env: primeiro.env,
+    aoTerminar: resto.length
+      ? () => {
+          t.status = "rodando"; // ainda há passos
+          proximo();
+          return null;
+        }
+      : aoTerminar,
   });
 };
 
@@ -468,6 +492,51 @@ app.post("/api/tarefas/:id/cancelar", (req, res) => {
     else t.proc.kill("SIGTERM");
   }
   res.json({ ok: true });
+});
+
+// Atualização: baixa só o que mudou no GitHub (projeto privado: o Git pede o login uma vez).
+const git = (...args) => spawnSync("git", args, { cwd: RAIZ, encoding: "utf-8", windowsHide: true });
+const versaoAtual = () => {
+  const r = git("rev-parse", "--short", "HEAD");
+  return r.status === 0 ? r.stdout.trim() : null;
+};
+
+app.get("/api/versao", (_req, res) => {
+  const temGit = !git("--version").error;
+  res.json({ versao: temGit ? versaoAtual() : null, git: temGit });
+});
+
+app.post("/api/atualizar", (_req, res) => {
+  if (git("--version").error) {
+    return res.status(400).json({ erro: "Falta o Git para atualizar. Rode o instalar-windows.bat uma vez (ele instala o Git)." });
+  }
+  const antes = versaoAtual();
+  const t = novaTarefa("atualizar", null, "Atualizar o Studio");
+  const g = (...args) => ({ exe: "git", args, env: { GIT_TERMINAL_PROMPT: "0" } });
+  const passos = [];
+  if (!fs.existsSync(path.join(RAIZ, ".git"))) {
+    // Primeira atualização de uma pasta baixada em ZIP: vira uma cópia do repositório.
+    passos.push(g("init", "-q"), g("remote", "add", "origin", REPO_URL));
+  }
+  passos.push(
+    g("fetch", "--depth", "1", "origin", "main"),
+    // Troca só os arquivos do projeto; vídeos, ajustes, .venv e node_modules ficam (estão no .gitignore).
+    g("reset", "--hard", "FETCH_HEAD"),
+  );
+  rodarSequencia(t, passos, {
+    cwd: RAIZ,
+    aoTerminar: () => {
+      const depois = versaoAtual();
+      const atualizado = depois !== antes;
+      registrar(t, atualizado ? `Atualizado: ${antes ?? "zip"} -> ${depois}` : "Já está na versão mais nova.");
+      if (atualizado) {
+        // Dá tempo da interface ler o resultado; o iniciar.ps1 instala o que mudou e reabre.
+        setTimeout(() => process.exit(SAIR_PARA_ATUALIZAR), 2500);
+      }
+      return { atualizado, versao: depois };
+    },
+  });
+  res.json({ id: t.id });
 });
 
 // Marca, configurações e login do Claude
