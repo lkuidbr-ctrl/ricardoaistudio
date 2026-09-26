@@ -169,6 +169,8 @@ const DIAGNOSTICOS = [
   [/não está logado no Claude|recusou o login/i, "Entre na sua conta do Claude em Configurações (canto de cima) e tente de novo."],
   [/PEXELS_API_KEY|Chave do Pexels inválida/i, "Cole a sua chave grátis do Pexels em Configurações e tente de novo."],
   [/Não consegui falar com o Ollama/i, "O Ollama não está aberto. Abra o Ollama ou troque a Inteligência para Claude."],
+  [/WinError 126|DLL load failed|Error loading .*\.dll|vcruntime|msvcp140/i,
+    "Falta um componente do Windows (Microsoft Visual C++). Rode o instalar-windows.bat de novo: ele instala e conserta."],
   [/No module named|ModuleNotFoundError|não é reconhecido como um comando|ENOENT/i, "A instalação está incompleta. Rode o instalar-windows.bat de novo."],
   [/No space left on device|espaço insuficiente|There is not enough space/i, "O disco está cheio. Libere espaço e tente de novo."],
   [/Invalid data found|moov atom not found|Não consegui abrir/i, "O arquivo de vídeo parece estar corrompido. Tente exportar/baixar o vídeo de novo."],
