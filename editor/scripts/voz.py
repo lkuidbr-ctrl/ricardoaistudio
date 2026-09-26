@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from _common import ffmpeg_exe, output_path
-from _ia import add_ia_args, pedir_json
+from _ia import IaIndisponivel, add_ia_args, pedir_json
 
 PASTA_VOZES = Path(__file__).resolve().parent / "modelos" / "vozes"
 VOZES_PADRAO = {
@@ -210,7 +210,10 @@ def dublar(args: argparse.Namespace) -> None:
 
     fr = frases(json.loads(captions_file.read_text(encoding="utf-8")), pausa_ms=500)
     texto = "\n".join(f"{i}: {f['texto']}" for i, f in enumerate(fr))
-    resposta = pedir_json(args, INSTRUCOES_TRADUCAO.format(idioma=NOMES[args.idioma]), texto, SCHEMA_TRADUCAO)
+    try:
+        resposta = pedir_json(args, INSTRUCOES_TRADUCAO.format(idioma=NOMES[args.idioma]), texto, SCHEMA_TRADUCAO)
+    except IaIndisponivel as e:
+        raise SystemExit(f"A dublagem precisa de IA para traduzir, mas {str(e)[0].lower()}{str(e)[1:]}")
     traducao = {t["indice"]: t["texto"].strip() for t in resposta["traducoes"]}
 
     voz = carregar_voz(args.voz or VOZES_PADRAO[args.idioma])

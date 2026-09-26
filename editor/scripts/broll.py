@@ -23,7 +23,7 @@ import urllib.request
 from pathlib import Path
 
 from _common import output_path
-from _ia import add_ia_args, pedir_json
+from _ia import IaIndisponivel, add_ia_args, avisar_sem_ia, pedir_json
 
 INSTRUCOES = """Você é editor de vídeos curtos virais (Reels/TikTok).
 Abaixo está a transcrição, uma palavra por linha, no formato "índice [segundos]: palavra".
@@ -149,7 +149,11 @@ def main() -> None:
         plano = por_dicionario(captions)
     else:
         texto = "\n".join(f"{i} [{c['startMs'] / 1000:.1f}]: {c['text'].strip()}" for i, c in enumerate(captions))
-        plano = pedir_json(args, INSTRUCOES, texto, SCHEMA)
+        try:
+            plano = pedir_json(args, INSTRUCOES, texto, SCHEMA)
+        except IaIndisponivel as e:
+            avisar_sem_ia(e)
+            plano = por_dicionario(captions)
 
     cenas = sorted(
         (c for c in plano["cenas"] if 0 <= c["indice"] < len(captions) and c["busca"].strip()),

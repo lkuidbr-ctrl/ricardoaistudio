@@ -43,6 +43,7 @@ const Cartao: React.FC<{
       {f.opcoes && !rodando ? <div className="cartao-opcoes">{f.opcoes}</div> : null}
       {f.aviso ? <p className="cartao-aviso">{f.aviso}</p> : null}
       {erro && tarefa?.dica ? <p className="alerta">{tarefa.dica}</p> : null}
+      {tarefa?.status === "ok" && tarefa.aviso ? <p className="alerta">{tarefa.aviso}</p> : null}
 
       {rodando ? (
         <div className="cartao-rodando">
@@ -213,7 +214,7 @@ export const Ferramentas: React.FC<{
       <div className="ia-escolha">
         <span>Inteligência</span>
         <select value={ia} onChange={(e) => setIa(e.target.value as Ia)}>
-          <option value="claude">Claude (melhor)</option>
+          <option value="claude">Claude (créditos da API)</option>
           <option value="ollama">Ollama (local, grátis)</option>
           <option value="dicionario">Sem IA (grátis)</option>
         </select>

@@ -19,6 +19,7 @@ export type Tarefa = {
   };
   linhas: string[];
   dica?: string | null; // explicação do erro, quando o servidor reconhece o problema
+  aviso?: string | null; // terminou, mas com ressalva (ex.: usou o modo sem IA)
 };
 
 const tratar = async (r: Response) => {

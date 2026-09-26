@@ -22,7 +22,7 @@ import unicodedata
 from pathlib import Path
 
 from _common import ffmpeg_exe, output_path
-from _ia import add_ia_args, pedir_json
+from _ia import IaIndisponivel, add_ia_args, avisar_sem_ia, pedir_json
 
 INSTRUCOES = """Você é editor de cortes virais (Reels/TikTok/Shorts) de lives e podcasts em português.
 Abaixo está a transcrição dividida em frases, no formato "índice [início-fim em segundos]: frase".
@@ -164,7 +164,11 @@ def main() -> None:
     else:
         texto = "\n".join(f"{i} [{f['startMs'] / 1000:.1f}-{f['endMs'] / 1000:.1f}]: {f['texto']}" for i, f in enumerate(fr))
         instr = INSTRUCOES.format(minimo=int(args.minimo), maximo=int(args.maximo), quantos=args.quantos)
-        plano = pedir_json(args, instr, texto, SCHEMA)
+        try:
+            plano = pedir_json(args, instr, texto, SCHEMA)
+        except IaIndisponivel as e:
+            avisar_sem_ia(e)
+            plano = por_heuristica(fr, args.minimo, args.maximo, args.quantos)
 
     clipes = []
     for c in plano["clipes"]:
