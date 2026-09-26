@@ -1,0 +1,8 @@
+# Transcrição (Whisper local, grátis)
+faster-whisper>=1.1
+# Recorte da pessoa (Robust Video Matting)
+torch>=2.2
+torchvision>=0.17
+opencv-python-headless>=4.9
+# ffmpeg embutido, caso você não tenha o ffmpeg instalado no sistema
+imageio-ffmpeg>=0.5
