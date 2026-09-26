@@ -77,6 +77,11 @@ os quadros. O recorte é colocado por cima do texto, então o texto parece estar
 
 Pode rodar o instalador de novo sempre que quiser atualizar: ele pula o que já está instalado.
 
+**Placa de vídeo:** o instalador só usa a placa NVIDIA se ela tiver 4 GB ou mais de memória.
+Placas menores ou antigas (como a GTX 750 Ti) rendem pouco e costumam dar erro; nesse caso
+o processador faz o trabalho. Se a placa falhar no meio de uma tarefa, o Studio continua
+sozinho no processador.
+
 ### Mac / Linux (ou Windows manual)
 
 Você precisa de **Node.js 20+** e **Python 3.10+**.

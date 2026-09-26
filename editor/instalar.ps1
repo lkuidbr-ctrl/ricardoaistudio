@@ -62,6 +62,15 @@ try {
     Get-ChildItem -Path (Split-Path $Editor -Parent) -Recurse -Include *.ps1, *.bat -ErrorAction SilentlyContinue |
         Unblock-File -ErrorAction SilentlyContinue
 
+    try {
+        $livre = (Get-PSDrive -Name $Editor.Substring(0, 1)).Free
+        if ($livre -lt 10GB) {
+            Aviso ("Só {0:N0} GB livres no disco. A instalação usa uns 5 GB e cada vídeo exportado ocupa espaço." -f ($livre / 1GB))
+        }
+    } catch {
+        $livre = $null  # não deu para medir o disco; segue a instalação
+    }
+
     # ---------------------------------------------------------------- Node.js
     Titulo '1/6  Node.js'
     $nodeOk = $false
@@ -105,21 +114,50 @@ try {
     }
     Rodar 'Atualizar o pip' { & $venvPy -m pip install --upgrade pip --quiet }
 
-    $nvidia = $false
+    # Placa NVIDIA só compensa com 4 GB ou mais de memória de vídeo. Placas menores/antigas
+    # (ex.: GTX 750 Ti, 2 GB) rendem pouco e costumam falhar; o processador faz o mesmo
+    # trabalho e ainda economiza ~2 GB de download e de disco.
+    $memoriaNvidia = 0
     try {
-        $nvidia = [bool](Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match 'NVIDIA' })
+        # O valor do registro é exato; o AdapterRAM do WMI trava em 4 GB, mas serve de reserva.
+        $chaves = Get-ItemProperty 'HKLM:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*' -ErrorAction SilentlyContinue |
+            Where-Object { "$($_.DriverDesc)" -match 'NVIDIA' }
+        foreach ($c in $chaves) {
+            $q = $c.'HardwareInformation.qwMemorySize'
+            if ($q) { $memoriaNvidia = [Math]::Max($memoriaNvidia, [double]$q) }
+        }
+        if (-not $memoriaNvidia) {
+            Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match 'NVIDIA' } |
+                ForEach-Object { $memoriaNvidia = [Math]::Max($memoriaNvidia, [double]$_.AdapterRAM) }
+        }
     } catch {
-        $nvidia = $false  # sem como detectar a placa: usa a versão para processador, que sempre funciona
+        $memoriaNvidia = 0  # sem como detectar a placa: usa a versão para processador, que sempre funciona
     }
-    if ($nvidia) {
-        Write-Host '    Placa NVIDIA encontrada: instalando o PyTorch com aceleração (download grande, ~2,5 GB)...'
+    $gbPlaca = [Math]::Round($memoriaNvidia / 1GB, 1)
+    if ($memoriaNvidia -ge 3.5GB) {
+        Write-Host "    Placa NVIDIA com $gbPlaca GB: instalando o PyTorch com aceleração (download grande, ~2,5 GB)..."
         $indice = 'https://download.pytorch.org/whl/cu126'
+        $querCuda = $true
     } else {
-        Write-Host '    Sem placa NVIDIA: instalando o PyTorch para processador (~200 MB)...'
+        if ($memoriaNvidia -gt 0) {
+            Write-Host "    Placa NVIDIA com só $gbPlaca GB: vou usar o processador, que rende igual e é mais estável."
+        }
+        Write-Host '    Instalando o PyTorch para processador (~200 MB)...'
         $indice = 'https://download.pytorch.org/whl/cpu'
+        $querCuda = $false
     }
-    Rodar 'Instalar o PyTorch' { & $venvPy -m pip install torch torchvision --index-url $indice }
+
+    # Se já existe um PyTorch do tipo errado (ex.: versão CUDA de uma instalação antiga), troca.
+    $atual = & $venvPy -c "import torch; print('cuda' if torch.version.cuda else 'cpu')" 2>$null
+    if ($LASTEXITCODE -eq 0 -and (($atual -eq 'cuda') -ne $querCuda)) {
+        Write-Host "    Trocando o PyTorch ($atual) pela versão certa para este computador..."
+        Rodar 'Trocar o PyTorch' { & $venvPy -m pip install --force-reinstall --no-deps torch torchvision --index-url $indice }
+    } else {
+        Rodar 'Instalar o PyTorch' { & $venvPy -m pip install torch torchvision --index-url $indice }
+    }
     Rodar 'Instalar os scripts' { & $venvPy -m pip install -r (Join-Path $Editor 'scripts\requirements.txt') }
+    # Os instaladores baixados ficam guardados no cache do pip (podem passar de 2 GB): apaga.
+    & $venvPy -m pip cache purge 2>$null | Out-Null
     Ok 'scripts de IA instalados'
 
     # ---------------------------------------------------------------- ant (login do Claude)

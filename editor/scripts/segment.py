@@ -41,10 +41,27 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    device = pick_device(args.device)
+    try:
+        out = recortar(args, device)
+    except RuntimeError as e:
+        # Placas antigas ou com pouca memória (ex.: GTX 750 Ti, 2 GB) podem não rodar o
+        # PyTorch com CUDA ("no kernel image", "out of memory"). O processador sempre funciona.
+        if device.type == "cpu" or not any(k in str(e).lower() for k in ("cuda", "kernel image", "out of memory", "cudnn")):
+            raise
+        print(f"\n(A placa de vídeo não deu conta: {str(e).splitlines()[0]}; continuando no processador)")
+        import torch
+
+        torch.cuda.empty_cache()
+        out = recortar(args, torch.device("cpu"))
+    print(f"\n-> {out}")
+
+
+def recortar(args: argparse.Namespace, device) -> Path:
     import cv2
     import torch
 
-    device = pick_device(args.device)
+    print(f"(recortando no {'processador' if device.type == 'cpu' else device.type})")
     if args.rvm_dir:
         model = torch.hub.load(str(args.rvm_dir), args.model, source="local")
     else:
@@ -75,27 +92,35 @@ def main() -> None:
         stdin=subprocess.PIPE,
     )
 
-    rec = [None] * 4  # estado recorrente do RVM (deixa o recorte estável entre quadros)
-    done = 0
-    with torch.no_grad():
-        while True:
-            ok, bgr = cap.read()
-            if not ok:
-                break
-            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-            src = torch.from_numpy(rgb).to(device).permute(2, 0, 1).float().div(255).unsqueeze(0)
-            _fgr, pha, *rec = model(src, *rec, downsample_ratio=downsample)
-            alpha = pha[0, 0].mul(255).round().byte().cpu().numpy()
-            encoder.stdin.write(cv2.merge([*cv2.split(rgb), alpha]).tobytes())
-            done += 1
-            if done % 30 == 0 or done == total:
-                print(f"\r{done}/{total or '?'} quadros", end="", flush=True)
+    try:
+        rec = [None] * 4  # estado recorrente do RVM (deixa o recorte estável entre quadros)
+        done = 0
+        with torch.no_grad():
+            while True:
+                ok, bgr = cap.read()
+                if not ok:
+                    break
+                rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+                src = torch.from_numpy(rgb).to(device).permute(2, 0, 1).float().div(255).unsqueeze(0)
+                _fgr, pha, *rec = model(src, *rec, downsample_ratio=downsample)
+                alpha = pha[0, 0].mul(255).round().byte().cpu().numpy()
+                encoder.stdin.write(cv2.merge([*cv2.split(rgb), alpha]).tobytes())
+                done += 1
+                if done % 30 == 0 or done == total:
+                    print(f"\r{done}/{total or '?'} quadros", end="", flush=True)
+    except BaseException:
+        # Falhou no meio (ex.: a placa de vídeo): fecha o ffmpeg para liberar o arquivo,
+        # senão o Windows não deixa a próxima tentativa sobrescrever o .webm.
+        cap.release()
+        encoder.kill()
+        encoder.wait()
+        raise
 
     cap.release()
     encoder.stdin.close()
     if encoder.wait() != 0:
         raise SystemExit("ffmpeg falhou ao gerar o WebM")
-    print(f"\n-> {out}")
+    return out
 
 
 if __name__ == "__main__":
