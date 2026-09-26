@@ -1,4 +1,6 @@
 # ricardoaistudio
 Projects
 
-- [`editor/`](editor/): editor de vídeos curtos com legendas animadas, zoom e texto atrás da pessoa (Remotion + Whisper + Robust Video Matting, tudo local e grátis).
+- [`editor/`](editor/): editor de vídeos curtos: legendas animadas, texto atrás da pessoa, cortes, B-roll, clipes, voz e marca (Remotion + Whisper + Claude). Veja o [`editor/README.md`](editor/README.md).
+
+**Windows:** baixe o projeto (Code → Download ZIP), descompacte e dê dois cliques em `instalar-windows.bat`.

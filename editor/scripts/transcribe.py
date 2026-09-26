@@ -28,8 +28,7 @@ def main() -> None:
     transcrever(args.video, args.model, args.language, args.device)
 
 
-def transcrever(video: Path, model_name: str = "small", language: str = "pt", device: str = "auto") -> Path:
-    """Gera <video>.captions.json com o tempo de cada palavra e devolve o caminho."""
+def _rodar_whisper(video: Path, model_name: str, language: str, device: str) -> tuple[list[dict], str]:
     from faster_whisper import WhisperModel
 
     compute_type = "int8" if device == "cpu" else "default"
@@ -60,10 +59,24 @@ def transcrever(video: Path, model_name: str = "small", language: str = "pt", de
                 }
             )
             print(f"{word.start:7.2f}s  {word.word.strip()}")
+    return captions, info.language
+
+
+def transcrever(video: Path, model_name: str = "small", language: str = "pt", device: str = "auto") -> Path:
+    """Gera <video>.captions.json com o tempo de cada palavra e devolve o caminho."""
+    try:
+        captions, idioma = _rodar_whisper(video, model_name, language, device)
+    except RuntimeError as e:
+        # No Windows com placa NVIDIA, a GPU pode falhar por falta das bibliotecas CUDA
+        # (cublas/cudnn). Nesse caso a transcrição continua na CPU, só um pouco mais lenta.
+        if device != "auto" or not any(k in str(e).lower() for k in ("cuda", "cublas", "cudnn")):
+            raise
+        print(f"(GPU indisponível para o Whisper: {e}; usando a CPU)")
+        captions, idioma = _rodar_whisper(video, model_name, language, "cpu")
 
     out = output_path(video, ".captions.json")
     out.write_text(json.dumps(captions, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"\n{len(captions)} palavras ({info.language}) -> {out}")
+    print(f"\n{len(captions)} palavras ({idioma}) -> {out}")
     return out
 
 

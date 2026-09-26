@@ -35,6 +35,25 @@ os quadros. O recorte é colocado por cima do texto, então o texto parece estar
 
 ## Instalação (uma vez só)
 
+### Windows: instalador de um clique
+
+1. Baixe o projeto: no GitHub, clique em **Code → Download ZIP** e descompacte.
+2. Dê dois cliques em **`instalar-windows.bat`**, na pasta principal do projeto.
+   - Se aparecer "O Windows protegeu o computador", clique em **Mais informações →
+     Executar assim mesmo**. O aviso aparece porque o arquivo veio da internet.
+3. Espere de 10 a 20 minutos. Ele instala sozinho o Node.js, o Python, o editor, as IAs
+   (com aceleração se você tiver placa NVIDIA) e a ferramenta de login do Claude.
+   No fim, abre o navegador para você entrar na conta do Claude e pede a chave do Pexels
+   (opcional).
+4. Pronto: aparecem dois atalhos na Área de Trabalho.
+   - **Editor de Vídeo** abre o editor no navegador.
+   - **Terminal do Editor** abre um terminal pronto para rodar os scripts
+     (`python scripts/...`).
+
+Pode rodar o instalador de novo sempre que quiser atualizar: ele pula o que já está instalado.
+
+### Mac / Linux (ou Windows manual)
+
 Você precisa de **Node.js 20+** e **Python 3.10+**.
 
 ```bash
