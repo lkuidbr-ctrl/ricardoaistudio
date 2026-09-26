@@ -3,6 +3,7 @@ import React from "react";
 import { CalculateMetadataFunction, Composition, staticFile } from "remotion";
 import { ShortVideo } from "./ShortVideo";
 import { shortVideoSchema, type ShortVideoProps } from "./schema";
+import { buildTimeline, type CutsFile } from "./timeline";
 
 const FPS = 30;
 
@@ -16,6 +17,7 @@ const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = async ({ p
     ["video", props.video],
     ["captions", props.captions],
     ["person", props.person],
+    ["cuts", props.cuts],
   ] as const) {
     if (file && !(await exists(file))) {
       throw new Error(
@@ -31,13 +33,18 @@ const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = async ({ p
     fields: { durationInSeconds: true },
     acknowledgeRemotionLicense: true,
   });
-  return { durationInFrames: Math.max(1, Math.floor((durationInSeconds ?? 5) * FPS)) };
+  const sourceFrames = Math.max(1, Math.floor((durationInSeconds ?? 5) * FPS));
+  if (!props.cuts) return { durationInFrames: sourceFrames };
+
+  const cuts: CutsFile = await fetch(staticFile(props.cuts)).then((r) => r.json());
+  return { durationInFrames: buildTimeline(cuts.keep, FPS, sourceFrames).totalFrames };
 };
 
 export const defaultProps: ShortVideoProps = {
   video: "video.mp4",
   captions: "video.captions.json",
   person: "video.person.webm",
+  cuts: "",
   captionStyle: "hormozi",
   captionColor: "#FFFFFF",
   highlightColor: "#FFE600",

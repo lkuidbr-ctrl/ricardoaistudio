@@ -5,6 +5,7 @@ Roda **100% no seu computador, de graça**: nenhuma API paga e nenhum servidor.
 - **Legendas animadas** com destaque palavra a palavra: `hormozi`, `karaoke`, `pop`, `neon`, `minimal`
 - **Palavras-chave** coloridas automaticamente
 - **Texto atrás da pessoa**, com as animações `rise`, `scale`, `slide` e `letters`
+- **Corte automático** de silêncios e vícios ("éé", "hã", "hum"), sem estragar o vídeo original
 - **Zoom automático** (punch-in) nos momentos que você escolher
 - Edição visual no **Remotion Studio** (o painel lateral edita tudo) e exportação em MP4 1080x1920
 
@@ -44,20 +45,28 @@ pip install -r scripts/requirements.txt
    ```
    Isso cria `public/video.captions.json`. Para mais precisão, use `--model medium`.
    Dá para abrir o JSON e corrigir alguma palavra à mão.
-3. **Recorte a pessoa** (só se for usar o texto atrás da pessoa):
+3. **Corte silêncios e "éé"** (opcional, instantâneo):
+   ```bash
+   python scripts/cut.py public/video.mp4
+   ```
+   Isso cria `public/video.cuts.json` com os trechos que ficam. No Studio, preencha o campo
+   `cuts` com `video.cuts.json`. O original não é alterado: para desfazer, deixe o campo vazio.
+   Para cortes mais agressivos use `--max-silence 250`; para cortar também "tipo" e "né", use
+   `--filler tipo --filler né`.
+4. **Recorte a pessoa** (só se for usar o texto atrás da pessoa):
    ```bash
    python scripts/segment.py public/video.mp4
    ```
    Isso cria `public/video.person.webm`. Na CPU leva uns 2 minutos para 12 s de vídeo;
    com GPU NVIDIA ou Mac M1+ é bem mais rápido.
-4. **Edite no Studio**:
+5. **Edite no Studio**:
    ```bash
    npm run studio
    ```
    No painel da direita você troca o estilo da legenda, as cores, as palavras-chave, os zooms
    e os textos atrás da pessoa (texto, momento, animação, cor, altura e tamanho). O preview
    atualiza na hora.
-5. **Exporte** pelo botão *Render* do Studio ou com `npm run render` (o arquivo sai em `out/video.mp4`).
+6. **Exporte** pelo botão *Render* do Studio ou com `npm run render` (o arquivo sai em `out/video.mp4`).
 
 Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os campos
 `video`, `captions` e `person` no painel. Se não quiser legenda ou recorte, deixe o campo vazio.
@@ -66,6 +75,7 @@ Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os
 
 | Campo | O que faz |
 |---|---|
+| `cuts` | Arquivo do `cut.py`. **Com cortes, os tempos de `zooms` e `behindTexts` são os do vídeo já cortado** (os mesmos do preview) |
 | `captionStyle` | `hormozi` (caixa alta, amarelo), `karaoke` (fundo na palavra falada), `pop` (uma palavra por vez, gigante), `neon` (brilho), `minimal` (discreto, com caixa) |
 | `captionY` | Altura da legenda em %. O padrão é 72, acima da interface do TikTok e do Reels |
 | `wordsWindowMs` | Quantas palavras aparecem juntas (maior = mais palavras por tela) |
@@ -86,8 +96,11 @@ src/
   captions/             os estilos de legenda
   effects/BehindText    texto atrás da pessoa
   effects/AutoZoom      zoom punch-in
+  effects/CutVideo      toca só os trechos mantidos (jump cut)
+  timeline.ts           converte tempos do original para o vídeo cortado
 scripts/
   transcribe.py         Whisper local -> legendas com tempo por palavra
+  cut.py                silêncios e "éé" -> trechos que ficam (video.cuts.json)
   segment.py            Robust Video Matting -> pessoa com fundo transparente
 ```
 

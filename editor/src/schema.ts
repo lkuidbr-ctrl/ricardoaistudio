@@ -28,6 +28,9 @@ export const shortVideoSchema = z.object({
   captions: z.string(),
   // Gerado por scripts/segment.py. Necessário para o texto atrás da pessoa.
   person: z.string(),
+  // Gerado por scripts/cut.py (silêncios e "éé" removidos). Vazio = vídeo inteiro.
+  // Zooms e textos usam o tempo do vídeo JÁ cortado (o que você vê no preview).
+  cuts: z.string(),
   captionStyle: z.enum(captionStyles),
   captionColor: zColor(),
   highlightColor: zColor(),

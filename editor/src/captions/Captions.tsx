@@ -10,7 +10,8 @@ export const Captions: React.FC<{ captions: Caption[]; props: ShortVideoProps }>
   const pages = useMemo(
     () =>
       createTikTokStyleCaptions({
-        captions,
+        // Fim de frase sempre troca de "página".
+        captions: captions.map((c) => ({ ...c, pageBreakAfter: /[.!?…]$/.test(c.text.trim()) })),
         // No estilo "pop" cada palavra é mostrada sozinha.
         combineTokensWithinMilliseconds: props.captionStyle === "pop" ? 0 : props.wordsWindowMs,
       }).pages,

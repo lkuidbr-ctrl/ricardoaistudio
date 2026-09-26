@@ -35,6 +35,8 @@ def main() -> None:
         language=args.language,
         word_timestamps=True,
         vad_filter=True,
+        # Sem isso o Whisper "limpa" a fala e esconde os "éé"/"hum", que o cut.py precisa ver.
+        initial_prompt="Hum, éé... então, tipo, hã, né? Ahn, é isso.",
     )
 
     captions = []
