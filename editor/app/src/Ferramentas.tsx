@@ -47,6 +47,7 @@ const Cartao: React.FC<{
 
       {rodando ? (
         <div className="cartao-rodando">
+          {tarefa?.etapa ? <b className="etapa">{tarefa.etapa}</b> : null}
           <div className="barra">
             <i className={tarefa?.progresso == null ? "indeterminada" : ""} style={{ width: `${(tarefa?.progresso ?? 0.3) * 100}%` }} />
           </div>
@@ -219,7 +220,20 @@ export const Ferramentas: React.FC<{
           <option value="dicionario">Sem IA (grátis)</option>
         </select>
       </div>
-      <h2>Passo a passo</h2>
+      <Cartao
+        f={{
+          id: "automatico",
+          icone: "🪄",
+          titulo: "Editar automático",
+          descricao: "A IA faz tudo: legenda, cortes, destaques, emojis, zooms, título-gancho e B-roll. Depois você só ajusta.",
+          feito: arquivos.captions && arquivos.cuts && arquivos.emojis,
+        }}
+        tarefa={ultima("automatico")}
+        bloqueado={false}
+        iniciar={() => iniciar("automatico")}
+        cancelar={cancelar}
+      />
+      <h2>Ou passo a passo</h2>
       {principais.map(cartao)}
       <h2>Criar a partir deste vídeo</h2>
       {derivados.map(cartao)}

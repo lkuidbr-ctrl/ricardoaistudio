@@ -12,7 +12,10 @@ preview ao vivo e exporta o MP4.
    desliga sozinho (se estiver exportando, ele termina antes e o vídeo fica em `editor\out`).
    Se algo der errado ao abrir, aparece um aviso e o registro fica em `editor\studio.log`.
 3. **Arraste seu vídeo** para a janela. Vídeos de iPhone (HEVC) são convertidos sozinhos.
-4. Na **coluna da esquerda**, rode as ferramentas na ordem:
+   Assim que ele chega, o **Editar automático** começa sozinho: a IA gera a legenda, corta
+   os silêncios, escolhe destaques e emojis, decide onde dar zoom, escreve o título-gancho e
+   (com a chave do Pexels) coloca o B-roll. Você só mexe no que não gostar.
+4. Se quiser refazer só uma parte, na **coluna da esquerda** rode as ferramentas uma a uma:
    - **Gerar legendas**: sempre o primeiro passo;
    - **Cortar silêncios**: tira pausas e "éé";
    - **Emojis e destaques**: a IA escolhe palavras-chave e emojis;
@@ -21,7 +24,8 @@ preview ao vivo e exporta o MP4.
      Na aba **Efeitos** aparece a lista das cenas, e dá para tirar a que não gostar;
    - **Recortar a pessoa**: para o texto ficar atrás de você.
 5. Na **coluna da direita**, ajuste o que quiser. O preview atualiza na hora.
-   - **Legenda**: estilo, cores, posição e palavras em destaque.
+   - **Legenda**: estilo, cores, posição, palavras em destaque e **Corrigir o texto**
+     (para consertar palavras que a transcrição errou; as duvidosas ficam em amarelo).
    - **Textos**: título-gancho e texto atrás da pessoa. O botão "+ no momento atual"
      usa o ponto onde o vídeo está parado.
    - **Efeitos**: zoom, transição entre frases (funciona mesmo sem cortar silêncios) e B-roll.

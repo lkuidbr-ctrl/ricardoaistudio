@@ -220,3 +220,10 @@ input[type="range"] { width: 100%; accent-color: var(--destaque); }
 }
 .erro-player { position: absolute; inset: 0; display: grid; place-content: center; gap: 8px; padding: 24px; text-align: center; background: #111; color: var(--texto-2); }
 .erro-player b { color: var(--texto); }
+.etapa { display: block; font-size: 12.5px; margin-bottom: 6px; }
+.frases { display: grid; gap: 6px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
+.frase { display: grid; gap: 2px; }
+.frase small { color: var(--texto-3); font-size: 11.5px; }
+.frase textarea { width: 100%; resize: vertical; font: inherit; font-size: 13.5px; color: inherit; background: #0f1015; border: 1px solid var(--borda); border-radius: 8px; padding: 6px 8px; }
+.frase textarea:focus { outline: none; border-color: var(--destaque); }
+.frase.duvida textarea { border-color: #d4a72c; }
