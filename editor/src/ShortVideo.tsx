@@ -7,7 +7,14 @@ import { Broll } from "./effects/Broll";
 import { CutTransition } from "./effects/CutTransition";
 import { CutVideo } from "./effects/CutVideo";
 import type { ShortVideoProps } from "./schema";
-import { buildTimeline, remapCaptions, type CutsFile, type EnrichedCaption } from "./timeline";
+import {
+  buildTimeline,
+  remapBroll,
+  remapCaptions,
+  type AutoBroll,
+  type CutsFile,
+  type EnrichedCaption,
+} from "./timeline";
 import { useJson } from "./useJson";
 
 // Camadas, de baixo para cima:
@@ -22,6 +29,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
   const { fps, durationInFrames } = useVideoConfig();
   const rawCaptions = useJson<EnrichedCaption[]>(props.captions);
   const cuts = useJson<CutsFile>(props.cuts);
+  const autoBroll = useJson<AutoBroll[]>(props.brollFile);
 
   const timeline = useMemo(
     // Com cortes, a composição já tem a duração editada; sem cortes, é o vídeo inteiro.
@@ -31,6 +39,11 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
   const captions = useMemo(
     () => (rawCaptions ? remapCaptions(rawCaptions, timeline) : null),
     [rawCaptions, timeline],
+  );
+
+  const broll = useMemo(
+    () => [...props.broll, ...(autoBroll ? remapBroll(autoBroll, timeline) : [])],
+    [props.broll, autoBroll, timeline],
   );
 
   if (cuts === undefined) return null;
@@ -59,7 +72,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
         </CutTransition>
       </AutoZoom>
 
-      {props.broll.map((b, i) => (
+      {broll.map((b, i) => (
         <Sequence
           key={i}
           from={Math.round((b.startMs / 1000) * fps)}

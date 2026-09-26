@@ -60,6 +60,8 @@ export const shortVideoSchema = z.object({
   // Efeito em cada emenda do corte de silêncios (precisa do campo cuts).
   cutTransition: z.enum(cutTransitions),
   broll: z.array(brollSchema),
+  // Gerado por scripts/broll.py (clipes do Pexels). Soma com a lista "broll" acima.
+  brollFile: z.string(),
   behindTexts: z.array(behindTextSchema),
 });
 

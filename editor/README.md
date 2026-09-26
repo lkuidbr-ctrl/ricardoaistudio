@@ -7,7 +7,8 @@ Roda **100% no seu computador, de graça**: sem servidor e sem API paga (o Claud
 - **Texto atrás da pessoa**, com as animações `rise`, `scale`, `slide` e `letters`
 - **Corte automático** de silêncios e vícios ("éé", "hã", "hum"), sem estragar o vídeo original
 - **Transições nas emendas dos cortes**: `zoom` (jump cut), `flash`, `whip` (borrão de movimento) e `glitch`
-- **B-roll**: imagens ou vídeos por cima, em tela cheia ou em cartão flutuante, com entrada `fade`, `slide`, `zoom` ou `glitch`
+- **B-roll automático**: a IA escolhe os momentos e baixa clipes grátis do Pexels
+- **B-roll manual**: imagens ou vídeos por cima, em tela cheia ou em cartão flutuante, com entrada `fade`, `slide`, `zoom` ou `glitch`
 - **Zoom automático** (punch-in) nos momentos que você escolher
 - Edição visual no **Remotion Studio** (o painel lateral edita tudo) e exportação em MP4 1080x1920
 
@@ -67,20 +68,33 @@ pip install -r scripts/requirements.txt
    liga e desliga os emojis.
    Com o Claude, um vídeo de 1 minuto custa poucos centavos de dólar; para gastar ainda
    menos, use `--modelo claude-haiku-4-5`.
-5. **Recorte a pessoa** (só se for usar o texto atrás da pessoa):
+5. **B-roll automático** (opcional). Precisa de uma chave grátis do Pexels
+   ([pexels.com/api](https://www.pexels.com/api/)):
+   ```bash
+   # Windows (PowerShell): $env:PEXELS_API_KEY="sua-chave"    Mac/Linux: export PEXELS_API_KEY=sua-chave
+   python scripts/broll.py public/video.mp4 --so-planejar   # só mostra as cenas que escolheria
+   python scripts/broll.py public/video.mp4                 # dicionário embutido
+   python scripts/broll.py public/video.mp4 --ia claude     # ou --ia ollama: escolhas mais espertas
+   ```
+   Os clipes vão para `public/broll/`, e o plano vai para `public/video.broll.json`. No Studio,
+   preencha `brollFile` com `video.broll.json`. Ele funciona junto com o corte de silêncios.
+   Para trocar uma cena, edite o JSON. Os créditos dos autores ficam em
+   `public/broll/video-creditos.txt`; os vídeos do Pexels são grátis e não exigem crédito,
+   mas é gentil dar.
+6. **Recorte a pessoa** (só se for usar o texto atrás da pessoa):
    ```bash
    python scripts/segment.py public/video.mp4
    ```
    Isso cria `public/video.person.webm`. Na CPU leva uns 2 minutos para 12 s de vídeo;
    com GPU NVIDIA ou Mac M1+ é bem mais rápido.
-6. **Edite no Studio**:
+7. **Edite no Studio**:
    ```bash
    npm run studio
    ```
    No painel da direita você troca o estilo da legenda, as cores, as palavras-chave, os zooms
    e os textos atrás da pessoa (texto, momento, animação, cor, altura e tamanho). O preview
    atualiza na hora.
-7. **Exporte** pelo botão *Render* do Studio ou com `npm run render` (o arquivo sai em `out/video.mp4`).
+8. **Exporte** pelo botão *Render* do Studio ou com `npm run render` (o arquivo sai em `out/video.mp4`).
 
 Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os campos
 `video`, `captions` e `person` no painel. Se não quiser legenda ou recorte, deixe o campo vazio.
@@ -96,6 +110,7 @@ Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os
 | `keywords` | Palavras extras que sempre ficam com a cor de destaque (somam às do `enrich.py`) |
 | `emojis` | Liga e desliga os emojis do `enrich.py` |
 | `cutTransition` | Efeito em cada emenda do corte: `none`, `zoom` (alterna perto/longe, o clássico do YouTube), `flash`, `whip`, `glitch`. Precisa do `cuts` |
+| `brollFile` | Arquivo do `broll.py`; soma com a lista `broll` |
 | `broll` | Coloque a imagem ou o vídeo em `public/` e informe `src`, `startMs`, `durationMs`, `mode` (`full` ou `pip`) e `transition`. Imagens ganham zoom lento (Ken Burns); o áudio do B-roll fica mudo |
 | `zooms` | `atMs` (quando), `durationMs` (por quanto tempo), `scale` (1.2 = 20% de zoom) |
 | `behindTexts` | `y` em % da altura (20-30 fica atrás da cabeça), `fontSize` de 250 a 400 para o efeito ficar bom |
@@ -122,6 +137,8 @@ scripts/
   transcribe.py         Whisper local -> legendas com tempo por palavra
   cut.py                silêncios e "éé" -> trechos que ficam (video.cuts.json)
   enrich.py             destaques e emojis (dicionário, Ollama ou Claude)
+  broll.py              B-roll automático com clipes grátis do Pexels
+  _ia.py                chamadas de IA compartilhadas (Ollama / Claude)
   segment.py            Robust Video Matting -> pessoa com fundo transparente
 ```
 

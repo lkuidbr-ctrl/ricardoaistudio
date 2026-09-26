@@ -1,3 +1,4 @@
+import type { Broll } from "./schema";
 import type { Caption } from "@remotion/captions";
 
 // Trecho do vídeo original que fica na edição (gerado por scripts/cut.py).
@@ -57,3 +58,12 @@ export const remapCaptions = (captions: EnrichedCaption[], timeline: Timeline): 
   }
   return result;
 };
+
+// B-roll gerado pelo scripts/broll.py: guarda o tempo do vídeo original (sourceMs).
+export type AutoBroll = Omit<Broll, "startMs"> & { sourceMs: number };
+
+export const remapBroll = (items: AutoBroll[], timeline: Timeline): Broll[] =>
+  items.flatMap(({ sourceMs, ...b }) => {
+    const hit = timeline.locate(sourceMs);
+    return hit ? [{ ...b, startMs: hit.ms }] : [];
+  });

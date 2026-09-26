@@ -13,10 +13,10 @@ import argparse
 import json
 import re
 import unicodedata
-import urllib.request
 from pathlib import Path
 
 from _common import output_path
+from _ia import add_ia_args, pedir_json
 
 INSTRUCOES = """Você é editor de vídeos curtos virais (Reels/TikTok) em português.
 Abaixo está a transcrição, uma palavra por linha, no formato "índice: palavra".
@@ -90,73 +90,10 @@ def por_dicionario(words: list[str]) -> dict:
     return {"destaques": destaques, "emojis": emojis}
 
 
-def por_ollama(texto: str, modelo: str) -> dict:
-    body = {
-        "model": modelo,
-        "stream": False,
-        "format": SCHEMA,
-        "options": {"temperature": 0.3},
-        "messages": [{"role": "system", "content": INSTRUCOES}, {"role": "user", "content": texto}],
-    }
-    req = urllib.request.Request(
-        "http://localhost:11434/api/chat",
-        data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=600) as r:
-            return json.loads(json.loads(r.read())["message"]["content"])
-    except urllib.error.URLError as e:
-        raise SystemExit(
-            f"Não consegui falar com o Ollama ({e}). Instale em https://ollama.com, "
-            f"rode `ollama pull {modelo}` e deixe o Ollama aberto."
-        )
-
-
-def por_claude(texto: str, modelo: str) -> dict:
-    import anthropic
-
-    # Lê a chave de ANTHROPIC_API_KEY (ou do login feito com `ant auth login`).
-    client = anthropic.Anthropic()
-    try:
-        response = client.beta.messages.create(
-            model=modelo,
-            max_tokens=16000,
-            system=INSTRUCOES,
-            messages=[{"role": "user", "content": texto}],
-            output_config={"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}},
-            # Se o modelo recusar o pedido, a própria API tenta de novo com o modelo reserva recomendado.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-        )
-    except TypeError as e:
-        if "authentication" not in str(e):
-            raise
-        raise SystemExit("Falta a chave do Claude: defina ANTHROPIC_API_KEY (https://platform.claude.com).")
-    except anthropic.AuthenticationError:
-        raise SystemExit("Chave inválida. Defina ANTHROPIC_API_KEY (https://platform.claude.com).")
-    except anthropic.RateLimitError:
-        raise SystemExit("Limite de uso da API atingido; espere um pouco e tente de novo.")
-    except anthropic.APIStatusError as e:
-        raise SystemExit(f"Erro da API ({e.status_code}): {e.message}")
-    except anthropic.APIConnectionError:
-        raise SystemExit("Sem conexão com a API da Anthropic.")
-
-    if response.stop_reason == "refusal":
-        raise SystemExit("O Claude recusou o pedido; tente --ia dicionario.")
-    if response.stop_reason == "max_tokens":
-        raise SystemExit("Resposta cortada (max_tokens); tente um vídeo menor.")
-    text = next(b.text for b in response.content if b.type == "text")
-    u = response.usage
-    print(f"(Claude: {u.input_tokens} tokens de entrada, {u.output_tokens} de saída)")
-    return json.loads(text)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("video", type=Path)
-    parser.add_argument("--ia", choices=["dicionario", "ollama", "claude"], default="dicionario")
-    parser.add_argument("--modelo", help="modelo do Ollama (padrão qwen2.5:7b) ou do Claude (padrão claude-opus-5)")
+    add_ia_args(parser)
     args = parser.parse_args()
 
     captions_file = output_path(args.video, ".captions.json")
@@ -166,12 +103,7 @@ def main() -> None:
     words = [c["text"].strip() for c in captions]
     texto = "\n".join(f"{i}: {w}" for i, w in enumerate(words))
 
-    if args.ia == "ollama":
-        result = por_ollama(texto, args.modelo or "qwen2.5:7b")
-    elif args.ia == "claude":
-        result = por_claude(texto, args.modelo or "claude-opus-5")
-    else:
-        result = por_dicionario(words)
+    result = por_dicionario(words) if args.ia == "dicionario" else pedir_json(args, INSTRUCOES, texto, SCHEMA)
 
     destaques = {i for i in result["destaques"] if 0 <= i < len(captions)}
     emojis = {e["indice"]: e["emoji"].strip() for e in result["emojis"] if 0 <= e["indice"] < len(captions) and e["emoji"].strip()}

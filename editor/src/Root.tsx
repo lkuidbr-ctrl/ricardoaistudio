@@ -18,6 +18,7 @@ const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = async ({ p
     ["captions", props.captions],
     ["person", props.person],
     ["cuts", props.cuts],
+    ["brollFile", props.brollFile],
   ] as const) {
     if (file && !(await exists(file))) {
       throw new Error(
@@ -55,6 +56,7 @@ export const defaultProps: ShortVideoProps = {
   zooms: [{ atMs: 2000, durationMs: 1500, scale: 1.25 }],
   cutTransition: "zoom",
   broll: [],
+  brollFile: "",
   behindTexts: [
     {
       text: "RICARDO",
