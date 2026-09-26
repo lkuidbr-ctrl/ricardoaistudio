@@ -6,6 +6,7 @@ import { BehindText } from "./effects/BehindText";
 import { Broll } from "./effects/Broll";
 import { CutTransition } from "./effects/CutTransition";
 import { CutVideo } from "./effects/CutVideo";
+import { Music, SoundEffects, type SfxEvent } from "./effects/Sound";
 import type { ShortVideoProps } from "./schema";
 import {
   buildTimeline,
@@ -46,6 +47,18 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     [props.broll, autoBroll, timeline],
   );
 
+  const sfxEvents = useMemo(() => {
+    const at = (ms: number) => Math.round((ms / 1000) * fps);
+    const events: SfxEvent[] = [];
+    const joinSound = { none: null, zoom: null, flash: "whoosh", whip: "whoosh", glitch: "glitch" } as const;
+    const js = joinSound[props.cutTransition];
+    if (js) for (const j of timeline.joins) events.push({ frame: j, name: js });
+    if (props.emojis) for (const c of captions ?? []) if (c.emoji) events.push({ frame: at(c.startMs), name: "pop" });
+    for (const b of broll) events.push({ frame: at(b.startMs), name: b.transition === "glitch" ? "glitch" : "whoosh" });
+    for (const t of props.behindTexts) events.push({ frame: at(t.startMs), name: "swoosh" });
+    return events;
+  }, [fps, props.cutTransition, props.emojis, props.behindTexts, timeline, captions, broll]);
+
   if (cuts === undefined) return null;
 
   return (
@@ -83,6 +96,11 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
       ))}
 
       {captions ? <Captions captions={captions} props={props} /> : null}
+
+      {props.music ? (
+        <Music src={props.music} volume={props.musicVolume} duckTo={props.duckTo} speech={captions ?? []} />
+      ) : null}
+      {props.sfx ? <SoundEffects events={sfxEvents} volume={props.sfxVolume} /> : null}
     </AbsoluteFill>
   );
 };

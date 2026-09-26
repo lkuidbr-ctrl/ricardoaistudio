@@ -9,6 +9,8 @@ Roda **100% no seu computador, de graça**: sem servidor e sem API paga (o Claud
 - **Transições nas emendas dos cortes**: `zoom` (jump cut), `flash`, `whip` (borrão de movimento) e `glitch`
 - **B-roll automático**: a IA escolhe os momentos e baixa clipes grátis do Pexels
 - **B-roll manual**: imagens ou vídeos por cima, em tela cheia ou em cartão flutuante, com entrada `fade`, `slide`, `zoom` ou `glitch`
+- **Música de fundo com ducking**: abaixa sozinha enquanto você fala
+- **Efeitos sonoros automáticos**: whoosh nas transições e no B-roll, pop nos emojis, glitch no glitch
 - **Zoom automático** (punch-in) nos momentos que você escolher
 - Edição visual no **Remotion Studio** (o painel lateral edita tudo) e exportação em MP4 1080x1920
 
@@ -112,6 +114,9 @@ Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os
 | `cutTransition` | Efeito em cada emenda do corte: `none`, `zoom` (alterna perto/longe, o clássico do YouTube), `flash`, `whip`, `glitch`. Precisa do `cuts` |
 | `brollFile` | Arquivo do `broll.py`; soma com a lista `broll` |
 | `broll` | Coloque a imagem ou o vídeo em `public/` e informe `src`, `startMs`, `durationMs`, `mode` (`full` ou `pip`) e `transition`. Imagens ganham zoom lento (Ken Burns); o áudio do B-roll fica mudo |
+| `music` | Música em `public/` (mp3 ou wav). Ela toca em loop, com fade no começo e no fim. Pegue músicas liberadas na Biblioteca de Áudio do YouTube ou no Pixabay Music |
+| `musicVolume` / `duckTo` | Volume da música (0.25 = 25%) e quanto ela abaixa durante a fala (0.3 = cai para 30% do volume) |
+| `sfx` / `sfxVolume` | Liga e desliga os efeitos sonoros e define o volume deles. Os sons ficam em `public/sfx/`; troque os arquivos se quiser outros sons |
 | `zooms` | `atMs` (quando), `durationMs` (por quanto tempo), `scale` (1.2 = 20% de zoom) |
 | `behindTexts` | `y` em % da altura (20-30 fica atrás da cabeça), `fontSize` de 250 a 400 para o efeito ficar bom |
 
@@ -132,6 +137,7 @@ src/
   effects/CutTransition efeitos nas emendas (zoom, flash, whip, glitch)
   effects/Broll         imagens/vídeos de apoio
   effects/Glitch        separação RGB reaproveitada pelos outros efeitos
+  effects/Sound         música com ducking e efeitos sonoros
   timeline.ts           converte tempos do original para o vídeo cortado
 scripts/
   transcribe.py         Whisper local -> legendas com tempo por palavra
@@ -139,6 +145,7 @@ scripts/
   enrich.py             destaques e emojis (dicionário, Ollama ou Claude)
   broll.py              B-roll automático com clipes grátis do Pexels
   _ia.py                chamadas de IA compartilhadas (Ollama / Claude)
+  gerar_sfx.py          sintetiza os efeitos sonoros de public/sfx/ (sem direito autoral)
   segment.py            Robust Video Matting -> pessoa com fundo transparente
 ```
 

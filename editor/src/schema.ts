@@ -60,6 +60,14 @@ export const shortVideoSchema = z.object({
   // Efeito em cada emenda do corte de silêncios (precisa do campo cuts).
   cutTransition: z.enum(cutTransitions),
   broll: z.array(brollSchema),
+  // Música de fundo (mp3/wav em public/). Vazio = sem música.
+  music: z.string(),
+  musicVolume: z.number().min(0).max(1),
+  // Volume da música enquanto você fala, como fração do normal (0.3 = 30%).
+  duckTo: z.number().min(0).max(1),
+  // Efeitos sonoros automáticos: whoosh nas transições e no B-roll, pop nos emojis.
+  sfx: z.boolean(),
+  sfxVolume: z.number().min(0).max(1),
   // Gerado por scripts/broll.py (clipes do Pexels). Soma com a lista "broll" acima.
   brollFile: z.string(),
   behindTexts: z.array(behindTextSchema),

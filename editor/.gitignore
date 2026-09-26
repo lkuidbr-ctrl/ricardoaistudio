@@ -3,5 +3,6 @@ out/
 public/*
 !public/.gitkeep
 !public/fonts/
+!public/sfx/
 __pycache__/
 .venv/
