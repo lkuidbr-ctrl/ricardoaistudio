@@ -1,9 +1,9 @@
 """Escolhe palavras-chave para destacar e emojis para as legendas.
 
 Uso:
-    python scripts/enrich.py public/video.mp4                      # dicionário embutido (grátis, instantâneo)
+    python scripts/enrich.py public/video.mp4                      # Claude (padrão; centavos por vídeo)
     python scripts/enrich.py public/video.mp4 --ia ollama          # IA local (grátis, precisa do Ollama)
-    python scripts/enrich.py public/video.mp4 --ia claude          # Claude (melhor, centavos por vídeo)
+    python scripts/enrich.py public/video.mp4 --ia dicionario      # dicionário embutido (grátis, instantâneo)
 
 Grava os campos "highlight" e "emoji" dentro do public/video.captions.json.
 Você pode abrir o arquivo e mudar/apagar qualquer emoji à mão.

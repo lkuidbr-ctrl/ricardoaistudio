@@ -4,7 +4,7 @@ Narrar um roteiro (vira um vídeo 9:16 com a narração e as legendas prontas):
     python scripts/voz.py narrar public/roteiro.txt
     python scripts/voz.py narrar public/roteiro.txt --fundo public/fundo.jpg --velocidade 1.1
 
-Dublar um vídeo seu em outro idioma (tradução pelo Claude ou Ollama):
+Dublar um vídeo seu em outro idioma (tradução pelo Claude, ou --ia ollama):
     python scripts/voz.py dublar public/video.mp4 --idioma en
     python scripts/voz.py dublar public/video.mp4 --idioma es --ia ollama --manter-fundo 0.15
 
@@ -161,7 +161,7 @@ def narrar(args: argparse.Namespace) -> None:
         alinhadas = alinhar_ao_roteiro(json.loads(legendas.read_text(encoding="utf-8")), texto)
         legendas.write_text(json.dumps(alinhadas, ensure_ascii=False, indent=1), encoding="utf-8")
         print("legendas alinhadas ao texto do roteiro:", "".join(c["text"] for c in alinhadas)[:120], "...")
-    print("Dica: python scripts/broll.py", out, "--ia claude   (cobre a narração com imagens)")
+    print("Dica: python scripts/broll.py", out, "  (cobre a narração com imagens do Pexels)")
 
 
 # ---------- dublar ----------
@@ -289,7 +289,6 @@ def main() -> None:
     d.add_argument("--idioma", choices=sorted(VOZES_PADRAO), required=True)
     d.add_argument("--manter-fundo", type=float, default=0.0, help="volume do áudio original por baixo (0 a 1)")
     add_ia_args(d)
-    d.set_defaults(ia="claude")
 
     for p in (n, d):
         p.add_argument("--voz", help="nome de uma voz do Piper, ex.: pt_BR-cadu-medium")

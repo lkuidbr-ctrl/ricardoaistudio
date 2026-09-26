@@ -10,7 +10,12 @@ PADRAO_CLAUDE = "claude-opus-5"
 
 
 def add_ia_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--ia", choices=["dicionario", "ollama", "claude"], default="dicionario")
+    parser.add_argument(
+        "--ia",
+        choices=["claude", "ollama", "dicionario"],
+        default="claude",
+        help="claude (padrão; login com `ant auth login`), ollama (local, grátis) ou dicionario (sem IA, grátis)",
+    )
     parser.add_argument(
         "--modelo", help=f"modelo do Ollama (padrão {PADRAO_OLLAMA}) ou do Claude (padrão {PADRAO_CLAUDE})"
     )
@@ -51,9 +56,10 @@ def por_ollama(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
 def por_claude(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
     import anthropic
 
-    # Lê a chave de ANTHROPIC_API_KEY (ou do login feito com `ant auth login`).
-    client = anthropic.Anthropic()
+    # Sem chave no código: o SDK usa o login OAuth do `ant auth login` (e renova o token
+    # sozinho). Se ANTHROPIC_API_KEY estiver definida, ela tem prioridade sobre o login.
     try:
+        client = anthropic.Anthropic()
         response = client.beta.messages.create(
             model=modelo,
             max_tokens=16000,
@@ -64,12 +70,18 @@ def por_claude(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
         )
-    except TypeError as e:
-        if "authentication" not in str(e):
+    except (TypeError, anthropic.CredentialsError) as e:
+        if isinstance(e, TypeError) and "authentication" not in str(e):
             raise
-        raise SystemExit("Falta a chave do Claude: defina ANTHROPIC_API_KEY (https://platform.claude.com).")
+        raise SystemExit(
+            "Você não está logado no Claude. Rode `ant auth login` (veja o README) "
+            "ou use --ia dicionario / --ia ollama."
+        )
     except anthropic.AuthenticationError:
-        raise SystemExit("Chave inválida. Defina ANTHROPIC_API_KEY (https://platform.claude.com).")
+        raise SystemExit(
+            "O Claude recusou o login. Rode `ant auth login` de novo (o login expira de tempos em tempos). "
+            "Se você tiver ANTHROPIC_API_KEY definida, ela passa na frente do login: apague-a."
+        )
     except anthropic.RateLimitError:
         raise SystemExit("Limite de uso da API atingido; espere um pouco e tente de novo.")
     except anthropic.APIStatusError as e:

@@ -1,9 +1,9 @@
 """B-roll automático: escolhe os momentos do vídeo e baixa clipes grátis do Pexels.
 
 Uso:
-    python scripts/broll.py public/video.mp4                   # dicionário embutido
-    python scripts/broll.py public/video.mp4 --ia claude       # IA escolhe cenas e buscas
+    python scripts/broll.py public/video.mp4                   # Claude escolhe cenas e buscas (padrão)
     python scripts/broll.py public/video.mp4 --ia ollama
+    python scripts/broll.py public/video.mp4 --ia dicionario   # dicionário embutido, sem IA
     python scripts/broll.py public/video.mp4 --so-planejar     # não baixa nada, só mostra o plano
 
 Precisa de uma chave grátis do Pexels (https://www.pexels.com/api/) na variável
@@ -156,7 +156,7 @@ def main() -> None:
         key=lambda c: c["indice"],
     )
     if not cenas:
-        raise SystemExit("Nenhuma cena de B-roll encontrada (tente --ia ollama ou --ia claude).")
+        raise SystemExit("Nenhuma cena de B-roll encontrada.")
 
     pasta = args.video.parent / "broll"
     pasta.mkdir(exist_ok=True)

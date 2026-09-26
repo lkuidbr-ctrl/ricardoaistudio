@@ -6,7 +6,7 @@ torchvision>=0.17
 opencv-python-headless>=4.9
 # ffmpeg embutido, caso você não tenha o ffmpeg instalado no sistema
 imageio-ffmpeg>=0.5
-# Emojis e destaques com o Claude (opcional)
+# Claude (padrão de enrich, broll, clips e dublagem)
 anthropic>=1.8
 # Voz por IA local (narração e dublagem)
 piper-tts>=1.3

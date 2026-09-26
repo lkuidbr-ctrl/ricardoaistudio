@@ -3,8 +3,8 @@ e gera vários shorts prontos para editar.
 
 Uso:
     python scripts/transcribe.py public/live.mp4          # antes: legendas do vídeo longo
-    python scripts/clips.py public/live.mp4                # heurística embutida (grátis)
-    python scripts/clips.py public/live.mp4 --ia claude    # ou --ia ollama: escolhas bem melhores
+    python scripts/clips.py public/live.mp4                # Claude escolhe os trechos (padrão)
+    python scripts/clips.py public/live.mp4 --ia dicionario  # heurística embutida, grátis e mais fraca
     python scripts/clips.py public/live.mp4 --quantos 5 --vertical --marca marca.json
 
 Para cada clipe gera, em public/clips/:
@@ -180,7 +180,7 @@ def main() -> None:
         clipes.append(c)
     clipes = clipes[: args.quantos]
     if not clipes:
-        raise SystemExit("Nenhum trecho bom encontrado. Tente --ia claude/ollama ou mude --minimo/--maximo.")
+        raise SystemExit("Nenhum trecho bom encontrado. Mude --minimo/--maximo ou tente outra --ia.")
 
     pasta = args.video.parent / "clips"
     pasta.mkdir(exist_ok=True)

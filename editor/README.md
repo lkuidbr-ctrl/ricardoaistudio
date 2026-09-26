@@ -1,9 +1,11 @@
 # Editor de vídeos curtos (Reels / TikTok / Shorts)
 
-Roda **100% no seu computador, de graça**: sem servidor e sem API paga (o Claude no `enrich.py` é opcional).
+Roda **no seu computador**: sem servidor. As escolhas inteligentes (emojis, B-roll, clipes e
+tradução) usam o **Claude**, com login OAuth pela sua conta. Quem quiser tudo de graça usa
+`--ia ollama` (IA local) ou `--ia dicionario` (sem IA).
 
 - **Legendas animadas** com destaque palavra a palavra: `hormozi`, `karaoke`, `pop`, `neon`, `minimal`
-- **Emojis e palavras-chave escolhidos por IA**: dicionário embutido (grátis), Ollama (IA local, grátis) ou Claude
+- **Emojis e palavras-chave escolhidos por IA**: Claude, Ollama (IA local, grátis) ou dicionário embutido (grátis)
 - **Texto atrás da pessoa**, com as animações `rise`, `scale`, `slide` e `letters`
 - **Corte automático** de silêncios e vícios ("éé", "hã", "hum"), sem estragar o vídeo original
 - **Transições nas emendas dos cortes**: `zoom` (jump cut), `flash`, `whip` (borrão de movimento) e `glitch`
@@ -43,6 +45,29 @@ python -m venv .venv
 pip install -r scripts/requirements.txt
 ```
 
+### Login no Claude (OAuth, sem chave de API)
+
+Os scripts usam o Claude por padrão. O login é feito uma vez só, pelo navegador, com a
+ferramenta oficial `ant` da Anthropic:
+
+1. **Instale o `ant`.**
+   - Mac: `brew install anthropics/tap/ant` e depois `xattr -d com.apple.quarantine "$(brew --prefix)/bin/ant"`
+   - Windows e Linux: baixe o arquivo do seu sistema em
+     [github.com/anthropics/anthropic-cli/releases](https://github.com/anthropics/anthropic-cli/releases)
+     e coloque o `ant` em uma pasta do PATH.
+2. **Faça login:** `ant auth login` abre o navegador; escolha a organização e o workspace.
+3. **Confira:** `ant auth status` mostra qual conta está ativa.
+
+Pronto: os scripts pegam o login sozinhos e renovam o acesso automaticamente. De tempos
+em tempos o login expira; se aparecer "O Claude recusou o login", rode `ant auth login` de novo.
+
+> **Atenção:** se existir a variável `ANTHROPIC_API_KEY` no seu computador (mesmo vazia),
+> ela passa na frente do login OAuth. Apague-a se quiser usar o login.
+
+O uso é cobrado na conta/workspace que você escolheu no login: um vídeo de 1 minuto custa
+poucos centavos de dólar. Para gastar ainda menos, use `--modelo claude-haiku-4-5` em
+qualquer script. Sem internet ou sem login? Use `--ia ollama` ou `--ia dicionario`.
+
 > Sem placa NVIDIA, dá para instalar o PyTorch mais leve (só CPU):
 > `pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu`
 
@@ -73,22 +98,20 @@ pip install -r scripts/requirements.txt
    `--filler tipo --filler né`.
 4. **Emojis e destaques** (opcional):
    ```bash
-   python scripts/enrich.py public/video.mp4                # dicionário: grátis e instantâneo
-   python scripts/enrich.py public/video.mp4 --ia ollama    # IA local grátis (instale o Ollama e rode `ollama pull qwen2.5:7b`)
-   python scripts/enrich.py public/video.mp4 --ia claude    # o mais esperto; precisa de ANTHROPIC_API_KEY
+   python scripts/enrich.py public/video.mp4                   # Claude (padrão)
+   python scripts/enrich.py public/video.mp4 --ia ollama       # IA local grátis (instale o Ollama e rode `ollama pull qwen2.5:7b`)
+   python scripts/enrich.py public/video.mp4 --ia dicionario   # dicionário: grátis e instantâneo
    ```
    Isso marca as palavras de destaque e os emojis dentro do `video.captions.json`. Dá para
    trocar ou apagar um emoji editando o arquivo (campo `"emoji"`). No Studio, o campo `emojis`
    liga e desliga os emojis.
-   Com o Claude, um vídeo de 1 minuto custa poucos centavos de dólar; para gastar ainda
-   menos, use `--modelo claude-haiku-4-5`.
 5. **B-roll automático** (opcional). Precisa de uma chave grátis do Pexels
    ([pexels.com/api](https://www.pexels.com/api/)):
    ```bash
    # Windows (PowerShell): $env:PEXELS_API_KEY="sua-chave"    Mac/Linux: export PEXELS_API_KEY=sua-chave
    python scripts/broll.py public/video.mp4 --so-planejar   # só mostra as cenas que escolheria
-   python scripts/broll.py public/video.mp4                 # dicionário embutido
-   python scripts/broll.py public/video.mp4 --ia claude     # ou --ia ollama: escolhas mais espertas
+   python scripts/broll.py public/video.mp4                 # Claude escolhe as cenas (padrão)
+   python scripts/broll.py public/video.mp4 --ia dicionario # sem IA
    ```
    Os clipes vão para `public/broll/`, e o plano vai para `public/video.broll.json`. No Studio,
    preencha `brollFile` com `video.broll.json`. Ele funciona junto com o corte de silêncios.
@@ -132,7 +155,7 @@ Nos clipes em lote: `python scripts/clips.py public/live.mp4 --marca marca.json`
 
 ```bash
 python scripts/transcribe.py public/live.mp4                     # legendas do vídeo inteiro
-python scripts/clips.py public/live.mp4 --ia claude --quantos 5   # ou --ia ollama, ou sem --ia (heurística)
+python scripts/clips.py public/live.mp4 --quantos 5               # Claude escolhe (padrão)
 python scripts/clips.py public/live.mp4 --vertical                # se a live for horizontal
 python scripts/render_all.py public/clips                         # renderiza todos em out/
 ```
@@ -145,7 +168,7 @@ o que não estiver no arquivo usa o padrão do editor.
 
 Quer caprichar em um clipe? Rode `cut.py`, `enrich.py` e os outros scripts nele, como em
 qualquer vídeo, e acrescente os campos no `.props.json` (por exemplo `"cuts": "clips/live-1.cuts.json"`).
-A heurística embutida é grátis, mas a IA escolhe trechos e títulos bem melhores.
+Com `--ia dicionario` ele usa uma heurística embutida, que é grátis, mas escolhe trechos e títulos bem piores.
 
 ## Voz por IA: narração e dublagem
 
@@ -156,7 +179,7 @@ voz é baixada (~60 MB).
 ```bash
 python scripts/voz.py narrar public/roteiro.txt                          # fundo em gradiente animado
 python scripts/voz.py narrar public/roteiro.txt --fundo public/fundo.jpg --velocidade 1.1
-python scripts/broll.py public/roteiro.mp4 --ia claude                   # cobre com imagens do Pexels
+python scripts/broll.py public/roteiro.mp4                               # cobre com imagens do Pexels
 ```
 Gera `public/roteiro.mp4` e as legendas. As legendas usam o texto exato do roteiro, com os
 tempos medidos pelo Whisper, então nomes e palavras estrangeiras saem certos. Separe
@@ -227,9 +250,9 @@ scripts/
   render_all.py         renderiza todos os .props.json de uma pasta
   voz.py                narração de roteiro e dublagem (Piper)
   cut.py                silêncios e "éé" -> trechos que ficam (video.cuts.json)
-  enrich.py             destaques e emojis (dicionário, Ollama ou Claude)
+  enrich.py             destaques e emojis (Claude, Ollama ou dicionário)
   broll.py              B-roll automático com clipes grátis do Pexels
-  _ia.py                chamadas de IA compartilhadas (Ollama / Claude)
+  _ia.py                chamadas de IA compartilhadas (Claude via login OAuth / Ollama)
   gerar_sfx.py          sintetiza os efeitos sonoros de public/sfx/ (sem direito autoral)
   segment.py            Robust Video Matting -> pessoa com fundo transparente
 ```
