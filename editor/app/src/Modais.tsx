@@ -311,6 +311,14 @@ export const ModalConfig: React.FC<{
   );
 };
 
+// As mensagens de erro de verdade (ex.: "Error: ...") costumam vir antes da pilha de chamadas;
+// mostra essas primeiro, e depois o fim do log.
+const linhasDeErro = (linhas: string[]) => {
+  const erros = linhas.filter((l) => /error|erro|failed|falhou|could not/i.test(l) && !/^\s*at /.test(l));
+  const unicos = [...new Set(erros)].slice(-8);
+  return unicos.length ? [...unicos, "...", ...linhas.slice(-5)] : linhas.slice(-15);
+};
+
 export const ModalExportar: React.FC<{ tarefa: Tarefa; fechar: () => void; cancelar: () => void }> = ({ tarefa, fechar, cancelar }) => {
   const pct = Math.round((tarefa.progresso ?? 0) * 100);
   return (
@@ -321,7 +329,7 @@ export const ModalExportar: React.FC<{ tarefa: Tarefa; fechar: () => void; cance
           <div className="barra grande">
             <i className={pct === 0 ? "indeterminada" : ""} style={{ width: `${Math.max(pct, 3)}%` }} />
           </div>
-          <p className="dica">{pct}% · pode continuar usando o computador; não feche a janela preta do Studio.</p>
+          <p className="dica">{pct}% · pode continuar editando. Se fechar o Studio, a exportação termina sozinha e o vídeo fica na pasta editor\out.</p>
           <footer>
             <button className="botao fantasma" onClick={cancelar}>Cancelar exportação</button>
             <button className="botao secundario" onClick={fechar}>Continuar editando</button>
@@ -341,8 +349,14 @@ export const ModalExportar: React.FC<{ tarefa: Tarefa; fechar: () => void; cance
         </>
       ) : (
         <>
-          <p className="erro">{tarefa.status === "cancelado" ? "Exportação cancelada." : "Não deu para exportar. Detalhes:"}</p>
-          {tarefa.status !== "cancelado" ? <pre className="log">{tarefa.linhas.slice(-15).join("\n")}</pre> : null}
+          <p className="erro">{tarefa.status === "cancelado" ? "Exportação cancelada." : "Não deu para exportar."}</p>
+          {tarefa.status !== "cancelado" ? (
+            <>
+              {tarefa.dica ? <p className="alerta">{tarefa.dica}</p> : null}
+              <p className="dica">Detalhes (o log completo fica na pasta editor\out, arquivo .log):</p>
+              <pre className="log">{linhasDeErro(tarefa.linhas).join("\n")}</pre>
+            </>
+          ) : null}
           <footer>
             <button className="botao secundario" onClick={fechar}>Fechar</button>
           </footer>

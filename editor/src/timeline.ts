@@ -67,3 +67,21 @@ export const remapBroll = (items: AutoBroll[], timeline: Timeline): Broll[] =>
     const hit = timeline.locate(sourceMs);
     return hit ? [{ ...b, startMs: hit.ms }] : [];
   });
+
+// Sem corte de silêncios não há emendas: usa o começo de cada frase (depois de ponto final
+// ou de uma pausa) para os efeitos de transição, como o "zoom alterna perto/longe".
+export const joinsPorFrase = (captions: EnrichedCaption[], fps: number, minimoS = 1.5): number[] => {
+  const joins: number[] = [];
+  let ultimo = 0;
+  for (let i = 1; i < captions.length; i++) {
+    const antes = captions[i - 1];
+    const agora = captions[i];
+    const fimDeFrase = /[.!?…]$/.test(antes.text.trim()) || agora.startMs - antes.endMs > 400;
+    const frame = Math.round((agora.startMs / 1000) * fps);
+    if (fimDeFrase && frame - ultimo >= minimoS * fps) {
+      joins.push(frame);
+      ultimo = frame;
+    }
+  }
+  return joins;
+};

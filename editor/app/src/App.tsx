@@ -107,6 +107,14 @@ export const App: React.FC = () => {
       .catch((e) => avisar(`Não consegui falar com o Studio: ${e.message}`, "erro"));
   }, [carregarProjetos, abrirProjeto, avisar]);
 
+  // Avisa o motor que a janela está aberta; fechada por ~1 min, ele se desliga sozinho.
+  useEffect(() => {
+    const avisarPresenca = () => fetch("/api/presenca", { method: "POST" }).catch(() => {});
+    avisarPresenca();
+    const intervalo = setInterval(avisarPresenca, 15_000);
+    return () => clearInterval(intervalo);
+  }, []);
+
   // Salva os ajustes automaticamente (meio segundo depois da última mudança).
   useEffect(() => {
     if (!props || !atual || carregado.current !== atual) return;

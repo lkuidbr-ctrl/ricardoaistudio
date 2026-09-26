@@ -229,6 +229,56 @@ const AbaTextos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara })
   );
 };
 
+type AutoBroll = { src: string; sourceMs: number; durationMs: number; mode: string; busca?: string; frase?: string };
+
+// Cenas que o B-roll automático escolheu: dá para conferir cada uma e tirar a que não combinou.
+const BrollAutomatico: React.FC<{ arquivo: string; mudar: Props["mudar"] }> = ({ arquivo, mudar }) => {
+  const [itens, setItens] = useState<AutoBroll[] | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    get<AutoBroll[]>(`/${arquivo}`)
+      .then((l) => vivo && setItens(Array.isArray(l) ? l : []))
+      .catch(() => vivo && setItens(null));
+    return () => {
+      vivo = false;
+    };
+  }, [arquivo]);
+  if (!itens) return null;
+
+  const remover = async (i: number) => {
+    const nova = itens.filter((_, j) => j !== i);
+    await enviar("PUT", `/api/broll?arquivo=${encodeURIComponent(arquivo)}`, nova);
+    setItens(nova);
+    // Recarrega o preview: desliga e religa o arquivo do B-roll.
+    mudar({ brollFile: "" });
+    setTimeout(() => mudar({ brollFile: arquivo }), 50);
+  };
+
+  return (
+    <div className="lista">
+      <p className="vazio-lista">
+        {itens.length ? `Cenas escolhidas pela IA (${itens.length}). Tire as que não combinaram:` : "Nenhuma cena automática sobrou."}
+      </p>
+      {itens.map((b, i) => (
+        <div className="item" key={b.src + i}>
+          <div className="item-topo">
+            <video className="miniatura" src={`/${b.src}#t=0.5`} muted preload="metadata" />
+            <div className="item-nome" style={{ cursor: "default" }}>
+              <span>{b.frase ? `“${b.frase}”` : (b.src.split("/").pop() ?? b.src)}</span>
+              <small>
+                {formatarTempo(b.sourceMs)} do vídeo original · {b.durationMs / 1000}s{b.busca ? ` · busca: ${b.busca}` : ""}
+              </small>
+            </div>
+            <button type="button" className="botao pequeno fantasma" title="Tirar esta cena" onClick={() => remover(i)}>
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const AbaEfeitos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara }) => (
   <>
     <Secao
@@ -260,7 +310,14 @@ const AbaEfeitos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara }
       />
     </Secao>
 
-    <Secao titulo="Transição nos cortes" dica={arquivos.cuts ? "Efeito em cada emenda do corte de silêncios." : 'Aparece quando você usa "Cortar silêncios".'}>
+    <Secao
+      titulo="Transição entre frases"
+      dica={
+        props.cuts
+          ? "Efeito em cada emenda do corte de silêncios."
+          : "Efeito no começo de cada frase (com o corte de silêncios, vai nas emendas do corte)."
+      }
+    >
       {arquivos.cuts ? (
         <Alternar
           rotulo="Usar o corte de silêncios"
@@ -297,6 +354,7 @@ const AbaEfeitos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara }
       {arquivos.brollFile ? (
         <Alternar rotulo="Usar o B-roll automático" ligado={Boolean(props.brollFile)} aoMudar={(v) => mudar({ brollFile: v ? props.video.replace(/\.[^./]+$/, "") + ".broll.json" : "" })} />
       ) : null}
+      {props.brollFile ? <BrollAutomatico arquivo={props.brollFile} mudar={mudar} /> : null}
       <Lista<Broll>
         itens={props.broll}
         titulo={(b) => b.src.split("/").pop() ?? b.src}
@@ -365,6 +423,7 @@ const AbaAudio: React.FC<Props> = ({ props, mudar }) => {
 };
 
 type Marca = {
+  ativa?: boolean;
   arroba: string;
   corPrincipal: string;
   corTexto: string;
@@ -404,16 +463,22 @@ const AbaMarca: React.FC<Props> = ({ props, mudar }) => {
   }, [marca]);
 
   if (!marca) return <p className="dica">Carregando...</p>;
-  const m = (p: Partial<Marca>) => setMarca({ ...marca, ...p });
+  // Mexer em qualquer campo liga a marca (é o que a pessoa espera ao configurar).
+  const m = (p: Partial<Marca>) => {
+    setMarca({ ...marca, ...p, ativa: true });
+    if (!props.brand) mudar({ brand: "marca.json" });
+  };
 
   return (
     <>
       <Alternar
-        rotulo="Usar minha marca neste vídeo"
-        dica="Cores, logo, barra de progresso e tela final"
+        rotulo="Usar minha marca nos vídeos"
+        dica="Vale para todos os vídeos: cores, @ ou logo, barra de progresso e tela final"
         ligado={Boolean(props.brand)}
         aoMudar={async (v) => {
-          if (v) await enviar("PUT", "/api/marca", marca);
+          const nova = { ...marca, ativa: v };
+          setMarca(nova);
+          await enviar("PUT", "/api/marca", nova);
           mudar({ brand: v ? "marca.json" : "" });
         }}
       />

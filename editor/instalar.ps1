@@ -310,6 +310,25 @@ try {
         Aviso 'Não consegui instalar o Git; o botão de atualizar do app não vai funcionar.'
     }
 
+
+    # Atalhos: abrem o Studio sem janela preta (PowerShell escondido + janela de app).
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    $menuIniciar = Join-Path ([Environment]::GetFolderPath('Programs')) 'Ricardo AI Studio.lnk'
+    $shell = New-Object -ComObject WScript.Shell
+    foreach ($destino in @((Join-Path $desktop 'Ricardo AI Studio.lnk'), $menuIniciar)) {
+        $lnk = $shell.CreateShortcut($destino)
+        $lnk.TargetPath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $Editor 'iniciar.ps1')`""
+        $lnk.WorkingDirectory = $Editor
+        $lnk.WindowStyle = 7  # minimizado: nem pisca na tela
+        $lnk.IconLocation = (Join-Path $Editor 'app\icone.ico') + ',0'
+        $lnk.Description = 'Editor de vídeos curtos com IA'
+        $lnk.Save()
+    }
+    # Atalhos antigos (versões anteriores): o terminal não é mais necessário no dia a dia.
+    Remove-Item (Join-Path $desktop 'Editor de Vídeo.lnk'), (Join-Path $desktop 'Terminal do Editor.lnk') -ErrorAction SilentlyContinue
+    Ok 'atalho "Ricardo AI Studio" na Área de Trabalho e no Menu Iniciar'
+
     if ($Atualizacao) {
         Write-Host ''
         Write-Host '  Atualização concluída! Abrindo o Studio de novo...' -ForegroundColor Green
@@ -342,27 +361,12 @@ try {
         Ok 'chave do Pexels já configurada'
     }
 
-    $desktop = [Environment]::GetFolderPath('Desktop')
-    $shell = New-Object -ComObject WScript.Shell
-    foreach ($atalho in @(
-        @{ Nome = 'Ricardo AI Studio'; Alvo = 'abrir-editor.bat'; Descricao = 'Abre o editor de vídeos no navegador' },
-        @{ Nome = 'Terminal do Editor'; Alvo = 'terminal-editor.bat'; Descricao = 'Terminal pronto para rodar os scripts' }
-    )) {
-        $lnk = $shell.CreateShortcut((Join-Path $desktop "$($atalho.Nome).lnk"))
-        $lnk.TargetPath = Join-Path $Editor $atalho.Alvo
-        $lnk.WorkingDirectory = $Editor
-        $lnk.Description = $atalho.Descricao
-        $lnk.Save()
-    }
-    # Remove o atalho antigo (versão sem interface visual)
-    Remove-Item (Join-Path $desktop 'Editor de Vídeo.lnk') -ErrorAction SilentlyContinue
-    Ok 'atalho "Ricardo AI Studio" criado na Área de Trabalho'
 
 
     Write-Host ''
     Write-Host '  Tudo pronto!' -ForegroundColor Green
     Write-Host '  Abra o atalho "Ricardo AI Studio" na Área de Trabalho e arraste seu vídeo para a janela.'
-    Write-Host '  Ele abre no navegador; deixe a janela preta aberta enquanto estiver usando.'
+    Write-Host '  Ele abre numa janela própria; quando você fecha a janela, ele se desliga sozinho.'
     Write-Host ''
     exit 0
 } catch {
