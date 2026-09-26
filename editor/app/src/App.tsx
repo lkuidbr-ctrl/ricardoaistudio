@@ -62,6 +62,8 @@ export const App: React.FC = () => {
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [menuAberto, setMenuAberto] = useState(false);
   const player = useRef<PlayerRef>(null);
+  // Tarefas já tratadas: a verificação periódica pode ver o fim da mesma tarefa mais de uma vez.
+  const finalizadas = useRef(new Set<string>());
   const carregado = useRef<string | null>(null);
 
   const avisar = useCallback((texto: string, tipo: Aviso["tipo"] = "ok") => {
@@ -140,9 +142,11 @@ export const App: React.FC = () => {
   // ---------------------------------------------------------------- tarefas
   const aoTerminar = useCallback(
     async (t: Tarefa) => {
+      if (finalizadas.current.has(t.id)) return;
+      finalizadas.current.add(t.id);
       if (t.status === "cancelado") return;
       if (t.status === "erro") {
-        avisar(`${t.rotulo}: deu erro. Veja os detalhes no cartão da ferramenta.`, "erro");
+        avisar(`${t.rotulo}: ${t.dica ?? "deu erro. Veja os detalhes no cartão da ferramenta."}`, "erro");
         return;
       }
       if (t.tipo === "exportar") return; // o modal de exportação mostra o resultado
@@ -188,9 +192,12 @@ export const App: React.FC = () => {
 
   const rodando = useMemo(() => Object.values(tarefas).filter((t) => t.status === "rodando"), [tarefas]);
 
+  const consultando = useRef(false);
   useEffect(() => {
     if (!rodando.length) return;
     const intervalo = setInterval(async () => {
+      if (consultando.current) return; // a consulta anterior ainda não voltou
+      consultando.current = true;
       for (const t of rodando) {
         try {
           const novo = await get<Tarefa & { total: number }>(`/api/tarefas/${t.id}?desde=${t.linhas.length}`);
@@ -201,6 +208,7 @@ export const App: React.FC = () => {
           /* servidor ocupado: tenta de novo no próximo ciclo */
         }
       }
+      consultando.current = false;
     }, 800);
     return () => clearInterval(intervalo);
   }, [rodando, aoTerminar]);

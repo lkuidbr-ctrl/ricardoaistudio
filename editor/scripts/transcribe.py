@@ -28,10 +28,25 @@ def main() -> None:
     transcrever(args.video, args.model, args.language, args.device)
 
 
+def _escolher_dispositivo(device: str) -> str:
+    if device != "auto":
+        return device
+    try:
+        import ctranslate2
+
+        return "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+    except Exception:
+        return "cpu"
+
+
 def _rodar_whisper(video: Path, model_name: str, language: str, device: str) -> tuple[list[dict], str]:
     from faster_whisper import WhisperModel
 
+    device = _escolher_dispositivo(device)
+    # No processador, "int8" usa ~4x menos memória RAM que o padrão (float32) com
+    # praticamente a mesma qualidade; sem isso o modelo "medium" pede ~3 GB só para ele.
     compute_type = "int8" if device == "cpu" else "default"
+    print(f"(Whisper '{model_name}' no {'processador' if device == 'cpu' else 'placa de vídeo'})")
     model = WhisperModel(model_name, device=device, compute_type=compute_type)
     segments, info = model.transcribe(
         str(video),
@@ -73,6 +88,16 @@ def transcrever(video: Path, model_name: str = "small", language: str = "pt", de
             raise
         print(f"(GPU indisponível para o Whisper: {e}; usando a CPU)")
         captions, idioma = _rodar_whisper(video, model_name, language, "cpu")
+    except MemoryError:
+        # Pouca RAM livre: tenta de novo com um modelo menor antes de desistir.
+        menor = {"large-v3": "medium", "turbo": "small", "medium": "small", "small": "base"}.get(model_name)
+        if not menor:
+            raise
+        print(f"(Faltou memória para o modelo '{model_name}'; tentando com o '{menor}', que usa menos RAM)")
+        import gc
+
+        gc.collect()
+        return transcrever(video, menor, language, device)
 
     out = output_path(video, ".captions.json")
     out.write_text(json.dumps(captions, ensure_ascii=False, indent=1), encoding="utf-8")

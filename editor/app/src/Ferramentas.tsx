@@ -42,6 +42,7 @@ const Cartao: React.FC<{
 
       {f.opcoes && !rodando ? <div className="cartao-opcoes">{f.opcoes}</div> : null}
       {f.aviso ? <p className="cartao-aviso">{f.aviso}</p> : null}
+      {erro && tarefa?.dica ? <p className="alerta">{tarefa.dica}</p> : null}
 
       {rodando ? (
         <div className="cartao-rodando">
@@ -104,7 +105,7 @@ export const Ferramentas: React.FC<{
       opcoes: (
         <select value={modelo} onChange={(e) => setModelo(e.target.value)}>
           <option value="small">Precisão normal (rápido)</option>
-          <option value="medium">Precisão alta (mais lento)</option>
+          <option value="medium">Precisão alta (mais lento, usa ~2 GB de RAM)</option>
         </select>
       ),
       valores: () => ({ modelo }),

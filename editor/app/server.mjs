@@ -158,11 +158,36 @@ const registrar = (t, texto) => {
   if (t.linhas.length > 400) t.linhas.splice(0, t.linhas.length - 400);
 };
 
+// Traduz os erros mais comuns em uma instrução do que fazer.
+const DIAGNOSTICOS = [
+  [/MemoryError|memory allocation of \d+ bytes failed|Unable to allocate|out of memory|CUDA out of memory/i,
+    "Faltou memória RAM no computador. Feche outros programas (e abas do navegador) e tente de novo. Nas legendas, use \"Precisão normal\"."],
+  [/não está logado no Claude|recusou o login/i, "Entre na sua conta do Claude em Configurações (canto de cima) e tente de novo."],
+  [/PEXELS_API_KEY|Chave do Pexels inválida/i, "Cole a sua chave grátis do Pexels em Configurações e tente de novo."],
+  [/Não consegui falar com o Ollama/i, "O Ollama não está aberto. Abra o Ollama ou troque a Inteligência para Claude."],
+  [/No module named|ModuleNotFoundError|não é reconhecido como um comando|ENOENT/i, "A instalação está incompleta. Rode o instalar-windows.bat de novo."],
+  [/No space left on device|espaço insuficiente|There is not enough space/i, "O disco está cheio. Libere espaço e tente de novo."],
+  [/Invalid data found|moov atom not found|Não consegui abrir/i, "O arquivo de vídeo parece estar corrompido. Tente exportar/baixar o vídeo de novo."],
+  [/Não achei .*captions\.json|Gere as legendas/i, "Gere as legendas primeiro."],
+];
+const diagnosticar = (linhas) => {
+  const texto = linhas.slice(-60).join("\n");
+  return DIAGNOSTICOS.find(([re]) => re.test(texto))?.[1] ?? null;
+};
+
 const rodar = (t, exe, args, { env = {}, aoTerminar } = {}) => {
   registrar(t, `▶ ${path.basename(exe)} ${args.map((a) => path.basename(String(a))).join(" ")}`);
   const proc = spawn(exe, args, {
     cwd: EDITOR,
-    env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1", FORCE_COLOR: "0", ...env },
+    env: {
+      ...process.env,
+      PYTHONIOENCODING: "utf-8",
+      PYTHONUNBUFFERED: "1",
+      FORCE_COLOR: "0",
+      // Aviso inofensivo do Windows sobre atalhos de arquivo no cache de modelos.
+      HF_HUB_DISABLE_SYMLINKS_WARNING: "1",
+      ...env,
+    },
     windowsHide: true,
   });
   t.proc = proc;
@@ -171,6 +196,7 @@ const rodar = (t, exe, args, { env = {}, aoTerminar } = {}) => {
   proc.on("error", (err) => {
     registrar(t, `Não consegui iniciar: ${err.message}`);
     t.status = "erro";
+    t.dica = diagnosticar(t.linhas);
   });
   proc.on("close", (codigo) => {
     t.proc = null;
@@ -186,6 +212,7 @@ const rodar = (t, exe, args, { env = {}, aoTerminar } = {}) => {
       }
     } else {
       t.status = "erro";
+      t.dica = diagnosticar(t.linhas);
     }
     t.fim = Date.now();
   });
@@ -423,6 +450,7 @@ app.get("/api/tarefas/:id", (req, res) => {
     status: t.status,
     progresso: t.progresso,
     resultado: t.resultado,
+    dica: t.dica ?? null,
     total: t.linhas.length,
     linhas: t.linhas.slice(desde),
   });
