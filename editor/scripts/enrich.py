@@ -1,12 +1,12 @@
-"""Escolhe palavras-chave para destacar e emojis para as legendas.
+"""Edição automática pela IA: destaques e emojis na legenda, zooms e título-gancho.
 
 Uso:
     python scripts/enrich.py public/video.mp4                      # Claude (padrão; centavos por vídeo)
     python scripts/enrich.py public/video.mp4 --ia ollama          # IA local (grátis, precisa do Ollama)
     python scripts/enrich.py public/video.mp4 --ia dicionario      # dicionário embutido (grátis, instantâneo)
 
-Grava os campos "highlight" e "emoji" dentro do public/video.captions.json.
-Você pode abrir o arquivo e mudar/apagar qualquer emoji à mão.
+Grava os campos "highlight" e "emoji" dentro do public/video.captions.json e os zooms e o
+título-gancho em public/video.edicao.json (o Studio aplica sozinho; dá para mudar tudo no app).
 """
 
 import argparse
@@ -19,7 +19,7 @@ from _common import output_path
 from _ia import IaIndisponivel, add_ia_args, avisar_sem_ia, pedir_json
 
 INSTRUCOES = """Você é editor de vídeos curtos virais (Reels/TikTok) em português.
-Abaixo está a transcrição, uma palavra por linha, no formato "índice: palavra".
+Abaixo está a transcrição, uma palavra por linha, no formato "índice [segundos]: palavra".
 
 Escolha:
 1. "destaques": as palavras de maior impacto (números, dinheiro, resultados, emoções,
@@ -27,6 +27,12 @@ Escolha:
 2. "emojis": emojis para algumas palavras-chave (cerca de 1 a cada 10 palavras), sempre
    um único emoji que combine com o sentido da palavra no contexto da frase.
    Não repita o mesmo emoji em palavras vizinhas.
+3. "zooms": momentos para aproximar a câmera, na palavra de maior impacto de uma frase
+   (revelação, número, promessa, virada). Cerca de 1 a cada 5 a 8 segundos, nunca dois com
+   menos de 3 segundos entre eles e nunca nos 2 primeiros segundos. "forte": true só nos 1 ou 2
+   momentos mais fortes do vídeo.
+4. "gancho": título curto (até 6 palavras) que aparece no começo do vídeo e faz a pessoa
+   querer assistir até o fim. Fiel ao que é falado, sem inventar promessa. Sem emoji e sem aspas.
 
 Use apenas os índices da lista."""
 
@@ -43,8 +49,18 @@ SCHEMA = {
                 "additionalProperties": False,
             },
         },
+        "zooms": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"indice": {"type": "integer"}, "forte": {"type": "boolean"}},
+                "required": ["indice", "forte"],
+                "additionalProperties": False,
+            },
+        },
+        "gancho": {"type": "string"},
     },
-    "required": ["destaques", "emojis"],
+    "required": ["destaques", "emojis", "zooms", "gancho"],
     "additionalProperties": False,
 }
 
@@ -87,7 +103,23 @@ def por_dicionario(words: list[str]) -> dict:
         if emoji and i - ultimo >= 5:  # no máximo um emoji a cada 5 palavras
             emojis.append({"indice": i, "emoji": emoji})
             ultimo = i
-    return {"destaques": destaques, "emojis": emojis}
+    # Sem IA: zoom nas palavras com emoji (o filtro de distância mínima fica em zooms_em_ms).
+    zooms = [{"indice": e["indice"], "forte": False} for e in emojis]
+    return {"destaques": destaques, "emojis": emojis, "zooms": zooms, "gancho": ""}
+
+
+def zooms_em_ms(zooms: list[dict], captions: list[dict], intervalo_ms: int = 3000) -> list[dict]:
+    """Índices da IA -> zooms no tempo do vídeo original, sem começo e sem dois colados."""
+    saida, ultimo = [], -intervalo_ms
+    for z in sorted(zooms, key=lambda z: z["indice"]):
+        if not 0 <= z["indice"] < len(captions):
+            continue
+        inicio = captions[z["indice"]]["startMs"]
+        if inicio < 2000 or inicio - ultimo < intervalo_ms:
+            continue
+        saida.append({"sourceMs": inicio, "durationMs": 1800 if z["forte"] else 1500, "scale": 1.35 if z["forte"] else 1.2})
+        ultimo = inicio
+    return saida
 
 
 def main() -> None:
@@ -101,7 +133,7 @@ def main() -> None:
         raise SystemExit(f"Não achei {captions_file}. Rode antes: python scripts/transcribe.py {args.video}")
     captions = json.loads(captions_file.read_text(encoding="utf-8"))
     words = [c["text"].strip() for c in captions]
-    texto = "\n".join(f"{i}: {w}" for i, w in enumerate(words))
+    texto = "\n".join(f"{i} [{c['startMs'] / 1000:.1f}]: {w}" for i, (c, w) in enumerate(zip(captions, words)))
 
     if args.ia == "dicionario":
         result = por_dicionario(words)
@@ -126,6 +158,17 @@ def main() -> None:
     print(" ".join(f"[{w}]" if i in destaques else w for i, w in enumerate(words)))
     print("emojis: " + ", ".join(f"{words[i]} {e}" for i, e in sorted(emojis.items())))
     print(f"-> {captions_file}")
+
+    # Zooms e gancho: o Studio aplica ao projeto (e guarda em "aplicado" o que colocou, para
+    # não apagar o que você mudou à mão quando refizer).
+    edicao_file = output_path(args.video, ".edicao.json")
+    anterior = json.loads(edicao_file.read_text(encoding="utf-8")) if edicao_file.exists() else {}
+    zooms = zooms_em_ms(result.get("zooms", []), captions)
+    gancho = result.get("gancho", "").strip().strip('"').strip()
+    edicao = {"zooms": zooms, "gancho": gancho, "aplicado": anterior.get("aplicado")}
+    edicao_file.write_text(json.dumps(edicao, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"zooms: {len(zooms)}" + (f" | gancho: {gancho}" if gancho else ""))
+    print(f"-> {edicao_file}")
 
 
 if __name__ == "__main__":

@@ -149,6 +149,8 @@ export const App: React.FC = () => {
   const mudar = useCallback((parcial: Partial<ShortVideoProps>) => setProps((p) => (p ? { ...p, ...parcial } : p)), []);
 
   // ---------------------------------------------------------------- tarefas
+  // aoTerminar é criado antes de "iniciar"; a referência deixa ele começar uma ferramenta.
+  const iniciarRef = useRef<(ferramenta: string, opcoes?: Record<string, unknown>, projeto?: string | null) => void>(() => {});
   const aoTerminar = useCallback(
     async (t: Tarefa) => {
       if (finalizadas.current.has(t.id)) return;
@@ -171,6 +173,13 @@ export const App: React.FC = () => {
       if (t.resultado?.novoProjeto) {
         await carregarProjetos();
         await abrirProjeto(t.resultado.novoProjeto);
+        // Vídeo novo que acabou de chegar: a IA já edita sozinha.
+        if (t.tipo === "converter") iniciarRef.current("automatico", {}, t.resultado.novoProjeto);
+        return;
+      }
+      if (t.resultado?.recarregar) {
+        // O "Editar automático" salvou tudo no projeto: abre de novo com o resultado.
+        if (t.projeto && t.projeto === carregado.current) await abrirProjeto(t.projeto);
         return;
       }
       if (t.resultado?.clipes) {
@@ -190,7 +199,9 @@ export const App: React.FC = () => {
           cuts: c.cuts ?? "",
           person: c.person ?? "",
           brollFile: c.brollFile ?? "",
-          ...(t.tipo === "emojis" ? { emojis: true, captions: `${c.captions}` } : {}),
+          ...(t.tipo === "emojis"
+            ? { emojis: true, captions: `${c.captions}`, zooms: c.zooms ?? [], hookText: c.hookText ?? "", hookDurationMs: c.hookDurationMs ?? 2500 }
+            : {}),
         });
         // Força o preview a reler as legendas (mesmo nome de arquivo, conteúdo novo).
         if (t.tipo === "emojis" || t.tipo === "transcrever") {
@@ -248,15 +259,16 @@ export const App: React.FC = () => {
       [id]: { id, rotulo, tipo, projeto, status: "rodando", progresso: null, resultado: null, linhas: [] },
     }));
 
-  const iniciar = async (ferramenta: string, opcoes: Record<string, unknown> = {}) => {
-    if (!atual) return;
+  const iniciar = async (ferramenta: string, opcoes: Record<string, unknown> = {}, projeto = atual) => {
+    if (!projeto) return;
     try {
-      const { id } = await enviar<{ id: string }>("POST", "/api/tarefas", { ferramenta, projeto: atual, opcoes: { ia, ...opcoes } });
-      acompanhar(id, ferramenta, ferramenta, atual);
+      const { id } = await enviar<{ id: string }>("POST", "/api/tarefas", { ferramenta, projeto, opcoes: { ia, ...opcoes } });
+      acompanhar(id, ferramenta, ferramenta, projeto);
     } catch (e) {
       avisar((e as Error).message, "erro");
     }
   };
+  iniciarRef.current = iniciar;
 
   const cancelar = (id: string) => enviar("POST", `/api/tarefas/${id}/cancelar`).catch(() => {});
 
@@ -284,7 +296,8 @@ export const App: React.FC = () => {
       }
       await carregarProjetos();
       await abrirProjeto(caminho);
-      avisar('Vídeo adicionado! Comece por "Gerar legendas".');
+      avisar("Vídeo adicionado! A IA está editando: legenda, cortes, destaques, zooms e título. Depois é só ajustar o que quiser.");
+      iniciar("automatico", {}, caminho);
     } catch (e) {
       avisar((e as Error).message, "erro");
     } finally {

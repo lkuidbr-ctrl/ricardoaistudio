@@ -101,6 +101,122 @@ function Lista<T>({
 
 // ------------------------------------------------------------------ abas
 
+type Palavra = { text: string; startMs: number; endMs: number; timestampMs?: number; confidence?: number; highlight?: boolean; emoji?: string };
+
+// Junta as palavras em frases curtas, para corrigir uma frase de cada vez.
+const emFrases = (palavras: Palavra[]) => {
+  const frases: { inicio: number; fim: number }[] = [];
+  let inicio = 0;
+  palavras.forEach((p, i) => {
+    const prox = palavras[i + 1];
+    const fecha = !prox || /[.!?…]$/.test(p.text.trim()) || prox.startMs - p.endMs > 1200 || i - inicio >= 9;
+    if (fecha) {
+      frases.push({ inicio, fim: i + 1 });
+      inicio = i + 1;
+    }
+  });
+  return frases;
+};
+
+// Troca o texto de uma frase. Mesmo número de palavras: mantém os tempos de cada uma.
+// Número diferente: divide o tempo da frase entre as palavras novas, pelo tamanho delas
+// (podendo ocupar a pausa até a próxima frase, se você acrescentou palavras).
+const reescrever = (antigas: Palavra[], texto: string, limiteMs: number): Palavra[] => {
+  const novas = texto.split(/\s+/).filter(Boolean);
+  if (!novas.length) return [];
+  if (novas.length === antigas.length) return antigas.map((p, i) => ({ ...p, text: " " + novas[i] }));
+  const inicio = antigas[0].startMs;
+  const fimAntigo = antigas[antigas.length - 1].endMs;
+  const total = (novas.length > antigas.length ? Math.max(fimAntigo, Math.min(limiteMs, fimAntigo + 1500)) : fimAntigo) - inicio;
+  const letras = novas.reduce((n, w) => n + w.length + 1, 0);
+  let t = inicio;
+  return novas.map((w) => {
+    const dur = (total * (w.length + 1)) / letras;
+    const igual = antigas.find((p) => p.text.trim().toLowerCase() === w.toLowerCase());
+    const p: Palavra = { text: " " + w, startMs: Math.round(t), endMs: Math.round(t + dur), timestampMs: Math.round(t + dur / 2), confidence: 1 };
+    if (igual?.highlight) p.highlight = true;
+    if (igual?.emoji) p.emoji = igual.emoji;
+    t += dur;
+    return p;
+  });
+};
+
+const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["mudar"]; ligada: boolean }> = ({ video, arquivo, mudar, ligada }) => {
+  const [palavras, setPalavras] = useState<Palavra[] | null>(null);
+  const [rascunho, setRascunho] = useState<Record<number, string>>({});
+  const [aberto, setAberto] = useState(false);
+  useEffect(() => {
+    if (!aberto) return;
+    let vivo = true;
+    get<Palavra[]>(`/${arquivo}`)
+      .then((l) => vivo && setPalavras(l))
+      .catch(() => vivo && setPalavras(null));
+    return () => {
+      vivo = false;
+    };
+  }, [arquivo, aberto]);
+
+  const frases = palavras ? emFrases(palavras) : [];
+  const textoDe = (f: { inicio: number; fim: number }) => palavras!.slice(f.inicio, f.fim).map((p) => p.text.trim()).join(" ");
+
+  const salvar = async (fi: number) => {
+    if (!palavras) return;
+    const f = frases[fi];
+    const novo = rascunho[f.inicio];
+    if (novo === undefined || novo.trim() === textoDe(f)) return;
+    const lista = [...palavras.slice(0, f.inicio), ...reescrever(palavras.slice(f.inicio, f.fim), novo, palavras[f.fim]?.startMs ?? Infinity), ...palavras.slice(f.fim)];
+    try {
+      await enviar("PUT", `/api/legenda?id=${encodeURIComponent(video)}`, lista);
+    } catch {
+      return;
+    }
+    setPalavras(lista);
+    setRascunho({});
+    if (ligada) {
+      // Recarrega o preview com o texto novo.
+      mudar({ captions: "" });
+      setTimeout(() => mudar({ captions: arquivo }), 50);
+    }
+  };
+
+  return (
+    <Secao
+      titulo="Corrigir o texto"
+      dica="Se a transcrição errou alguma palavra, corrija aqui. As frases em amarelo são onde a IA ficou em dúvida."
+      acao={
+        <button type="button" className="botao pequeno secundario" onClick={() => setAberto((v) => !v)}>
+          {aberto ? "Fechar" : "Abrir texto"}
+        </button>
+      }
+    >
+      {aberto && palavras ? (
+        <div className="frases">
+          {frases.map((f, fi) => {
+            const duvida = palavras.slice(f.inicio, f.fim).some((p) => (p.confidence ?? 1) < 0.6);
+            return (
+              <label key={f.inicio} className={`frase ${duvida ? "duvida" : ""}`}>
+                <small>{formatarTempo(palavras[f.inicio].startMs)}</small>
+                <textarea
+                  rows={2}
+                  value={rascunho[f.inicio] ?? textoDe(f)}
+                  onChange={(e) => setRascunho((r) => ({ ...r, [f.inicio]: e.target.value }))}
+                  onBlur={() => salvar(fi)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      (e.target as HTMLTextAreaElement).blur();
+                    }
+                  }}
+                />
+              </label>
+            );
+          })}
+        </div>
+      ) : null}
+    </Secao>
+  );
+};
+
 const AbaLegenda: React.FC<Props> = ({ props, mudar, arquivos }) => {
   const [palavra, setPalavra] = useState("");
   return (
@@ -114,6 +230,9 @@ const AbaLegenda: React.FC<Props> = ({ props, mudar, arquivos }) => {
           aoMudar={(v) => mudar({ captions: v ? props.video.replace(/\.[^./]+$/, "") + ".captions.json" : "" })}
         />
       )}
+      {arquivos.captions ? (
+        <CorrigirLegenda video={props.video} arquivo={props.captions || props.video.replace(/\.[^./]+$/, "") + ".captions.json"} mudar={mudar} ligada={Boolean(props.captions)} />
+      ) : null}
       <Secao titulo="Estilo">
         <div className="estilos">
           {ESTILOS.map((e) => (

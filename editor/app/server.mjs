@@ -310,6 +310,7 @@ const FERRAMENTAS = {
     rotulo: "Emojis e destaques",
     args: (v, o) => [py("enrich.py"), v, ...argsIa(o)],
     extra: () => ({ emojis: true }),
+    edicaoIa: true,
   },
   broll: {
     rotulo: "B-roll automático",
@@ -343,6 +344,88 @@ const FERRAMENTAS = {
   },
 };
 
+// Tempo do vídeo original -> tempo do vídeo já cortado (o que o preview mostra).
+const noVideoCortado = (ms, keep) => {
+  if (!keep?.length) return ms;
+  let antes = 0;
+  for (const k of keep) {
+    if (ms < k.startMs) return antes; // caiu numa pausa cortada: vai para o próximo trecho
+    if (ms <= k.endMs) return antes + (ms - k.startMs);
+    antes += k.endMs - k.startMs;
+  }
+  return antes;
+};
+const mesmoJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+// Zooms e título-gancho que a IA sugeriu (enrich.py). Só troca o que você não mudou à mão.
+const aplicarEdicaoIa = (projeto, cfg) => {
+  const arq = noPublic(irmao(projeto, ".edicao.json"));
+  const edicao = lerJson(arq, null);
+  if (!edicao) return;
+  const keep = cfg.cuts ? lerJson(noPublic(cfg.cuts), {}).keep : null;
+  const zooms = (edicao.zooms || []).map((z) => ({ atMs: Math.round(noVideoCortado(z.sourceMs, keep)), durationMs: z.durationMs, scale: z.scale }));
+  const antes = edicao.aplicado || {};
+  if (!cfg.zooms?.length || mesmoJson(cfg.zooms, antes.zooms)) cfg.zooms = zooms;
+  if (edicao.gancho && (!cfg.hookText || cfg.hookText === antes.gancho)) {
+    cfg.hookText = edicao.gancho;
+    cfg.hookDurationMs = cfg.hookDurationMs || 2500;
+  }
+  salvarJson(arq, { ...edicao, aplicado: { zooms: cfg.zooms, gancho: cfg.hookText } });
+};
+
+// O que cada ferramenta muda no projeto quando termina.
+const aplicarFerramenta = (projeto, f) => {
+  if (!f.campo && !f.extra) return;
+  const cfg = configuracoesDoProjeto(projeto);
+  if (f.campo) cfg[f.campo] = irmao(projeto, GERADOS[f.campo]);
+  Object.assign(cfg, f.extra?.() ?? {});
+  if (f.edicaoIa) aplicarEdicaoIa(projeto, cfg);
+  salvarConfiguracoes(projeto, cfg);
+};
+
+// "Editar automático": a IA faz o vídeo inteiro, passo a passo; você só ajusta o que quiser.
+const rodarAutomatico = (t, projeto, opcoes) => {
+  const tem = (suf) => fs.existsSync(noPublic(irmao(projeto, suf)));
+  const passos = [];
+  if (!tem(".captions.json")) passos.push("transcrever");
+  if (!tem(".cuts.json")) passos.push("cortar");
+  passos.push("emojis");
+  if (config().pexelsKey) passos.push("broll");
+  const proximo = (i) => {
+    if (t.status === "cancelado") return;
+    if (i >= passos.length) {
+      t.status = "ok";
+      t.progresso = 1;
+      t.etapa = null;
+      t.resultado = { recarregar: true };
+      t.fim = Date.now();
+      return;
+    }
+    const f = FERRAMENTAS[passos[i]];
+    t.status = "rodando";
+    t.progresso = null;
+    t.etapa = `Passo ${i + 1} de ${passos.length}: ${f.rotulo}`;
+    registrar(t, `━━ ${t.etapa}`);
+    rodar(t, pythonExe(), f.args(noPublic(projeto), { ...opcoes, modelo: "small" }), {
+      env: envDasChaves(),
+      aoTerminar: () => {
+        aplicarFerramenta(projeto, f);
+        setImmediate(() => proximo(i + 1));
+        return null;
+      },
+      // B-roll é um extra: se falhar (internet, Pexels), o resto do vídeo continua pronto.
+      aoFalhar: passos[i] === "broll"
+        ? () => {
+            t.aviso = "o B-roll automático não deu certo desta vez (veja os detalhes). O resto ficou pronto.";
+            setImmediate(() => proximo(i + 1));
+            return true;
+          }
+        : undefined,
+    });
+  };
+  proximo(0);
+};
+
 const precisaLegenda = new Set(["cortar", "emojis", "broll", "clipes", "dublar"]);
 
 // ------------------------------------------------------------------ servidor
@@ -365,6 +448,17 @@ app.put("/api/projeto", (req, res) => {
   res.json({ ok: true });
 });
 
+// Correção do texto da legenda feita no app.
+app.put("/api/legenda", (req, res) => {
+  const id = String(req.query.id || "");
+  const arq = noPublic(irmao(id, ".captions.json"));
+  const ok = Array.isArray(req.body) && req.body.every((w) => typeof w?.text === "string" && Number.isFinite(w.startMs) && Number.isFinite(w.endMs));
+  if (!ok) return res.status(400).json({ erro: "legenda inválida" });
+  if (!fs.existsSync(arq)) return res.status(404).json({ erro: "legenda não encontrada" });
+  salvarJson(arq, req.body);
+  res.json({ ok: true });
+});
+
 // Lista do B-roll automático: o app mostra as cenas e deixa remover as que não combinaram.
 app.put("/api/broll", (req, res) => {
   const arquivo = String(req.query.arquivo || "");
@@ -378,7 +472,7 @@ app.put("/api/broll", (req, res) => {
 app.delete("/api/projeto", (req, res) => {
   const id = String(req.query.id || "");
   const base = noPublic(id).replace(/\.[^./\\]+$/, "");
-  for (const suf of ["", ".captions.json", ".cuts.json", ".person.webm", ".broll.json", ".settings.json", ".props.json"]) {
+  for (const suf of ["", ".captions.json", ".cuts.json", ".person.webm", ".broll.json", ".edicao.json", ".settings.json", ".props.json"]) {
     const alvo = suf ? base + suf : noPublic(id);
     fs.rmSync(alvo, { force: true });
   }
@@ -433,6 +527,12 @@ app.get("/api/uploads", (_req, res) => {
 // Ferramentas de IA
 app.post("/api/tarefas", (req, res) => {
   const { ferramenta, projeto, opcoes = {} } = req.body || {};
+  if (ferramenta === "automatico") {
+    if (!fs.existsSync(noPublic(projeto))) return res.status(404).json({ erro: "vídeo não encontrado" });
+    const t = novaTarefa("automatico", projeto, "Editar automático");
+    rodarAutomatico(t, projeto, opcoes);
+    return res.json({ id: t.id });
+  }
   const f = FERRAMENTAS[ferramenta];
   if (!f) return res.status(400).json({ erro: "ferramenta desconhecida" });
   if (!fs.existsSync(noPublic(projeto))) return res.status(404).json({ erro: "vídeo não encontrado" });
@@ -443,12 +543,7 @@ app.post("/api/tarefas", (req, res) => {
   rodar(t, pythonExe(), f.args(noPublic(projeto), opcoes), {
     env: envDasChaves(),
     aoTerminar: () => {
-      if (f.campo || f.extra) {
-        const cfg = configuracoesDoProjeto(projeto);
-        if (f.campo) cfg[f.campo] = irmao(projeto, GERADOS[f.campo]);
-        Object.assign(cfg, f.extra?.() ?? {});
-        salvarConfiguracoes(projeto, cfg);
-      }
+      aplicarFerramenta(projeto, f);
       if (f.novo) return { novoProjeto: f.novo(projeto, opcoes) };
       if (f.clipes) {
         const stem = path.basename(projeto).replace(/\.[^.]+$/, "");
@@ -544,6 +639,7 @@ app.get("/api/tarefas/:id", (req, res) => {
     resultado: t.resultado,
     dica: t.dica ?? null,
     aviso: t.aviso ?? null,
+    etapa: t.etapa ?? null,
     total: t.linhas.length,
     linhas: t.linhas.slice(desde),
   });

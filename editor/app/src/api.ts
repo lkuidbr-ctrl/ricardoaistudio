@@ -16,10 +16,12 @@ export type Tarefa = {
     clipes?: { id: string; titulo: string; nota: number; inicioMs: number; fimMs: number }[];
     atualizado?: boolean;
     versao?: string | null;
+    recarregar?: boolean;
   };
   linhas: string[];
   dica?: string | null; // explicação do erro, quando o servidor reconhece o problema
   aviso?: string | null; // terminou, mas com ressalva (ex.: usou o modo sem IA)
+  etapa?: string | null; // "Editar automático": em qual passo está
 };
 
 const tratar = async (r: Response) => {
