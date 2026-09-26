@@ -16,7 +16,7 @@ import unicodedata
 from pathlib import Path
 
 from _common import output_path
-from _ia import add_ia_args, pedir_json
+from _ia import IaIndisponivel, add_ia_args, avisar_sem_ia, pedir_json
 
 INSTRUCOES = """Você é editor de vídeos curtos virais (Reels/TikTok) em português.
 Abaixo está a transcrição, uma palavra por linha, no formato "índice: palavra".
@@ -103,7 +103,14 @@ def main() -> None:
     words = [c["text"].strip() for c in captions]
     texto = "\n".join(f"{i}: {w}" for i, w in enumerate(words))
 
-    result = por_dicionario(words) if args.ia == "dicionario" else pedir_json(args, INSTRUCOES, texto, SCHEMA)
+    if args.ia == "dicionario":
+        result = por_dicionario(words)
+    else:
+        try:
+            result = pedir_json(args, INSTRUCOES, texto, SCHEMA)
+        except IaIndisponivel as e:
+            avisar_sem_ia(e)
+            result = por_dicionario(words)
 
     destaques = {i for i in result["destaques"] if 0 <= i < len(captions)}
     emojis = {e["indice"]: e["emoji"].strip() for e in result["emojis"] if 0 <= e["indice"] < len(captions) and e["emoji"].strip()}

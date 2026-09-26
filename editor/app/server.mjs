@@ -143,6 +143,7 @@ const registrar = (t, texto) => {
     if (!partes.length) continue;
     const ultima = partes[partes.length - 1].replace(/\x1b\[[0-9;]*m/g, "").trimEnd();
     t.linhas.push(ultima);
+    if (ultima.startsWith("AVISO:")) t.aviso = ultima.slice(6).trim();
     if (t.tipo === "exportar") {
       // Remotion: "Bundling 40%" -> "Rendered 120/380" (85% da barra) -> "Encoded 300/380" (15%).
       const r = ultima.match(/Rendered (\d+)\/(\d+)/);
@@ -166,6 +167,8 @@ const registrar = (t, texto) => {
 const DIAGNOSTICOS = [
   [/MemoryError|memory allocation of \d+ bytes failed|Unable to allocate|out of memory|CUDA out of memory/i,
     "Faltou memória RAM no computador. Feche outros programas (e abas do navegador) e tente de novo. Nas legendas, use \"Precisão normal\"."],
+  [/credit balance is too low|sem créditos/i,
+    "Sua conta da API do Claude está sem créditos (a assinatura Pro/Max não inclui a API). Adicione créditos em platform.claude.com > Billing ou troque a Inteligência para \"Sem IA\"."],
   [/não está logado no Claude|recusou o login/i, "Entre na sua conta do Claude em Configurações (canto de cima) e tente de novo."],
   [/PEXELS_API_KEY|Chave do Pexels inválida/i, "Cole a sua chave grátis do Pexels em Configurações e tente de novo."],
   [/Não consegui falar com o Ollama/i, "O Ollama não está aberto. Abra o Ollama ou troque a Inteligência para Claude."],
@@ -477,6 +480,7 @@ app.get("/api/tarefas/:id", (req, res) => {
     progresso: t.progresso,
     resultado: t.resultado,
     dica: t.dica ?? null,
+    aviso: t.aviso ?? null,
     total: t.linhas.length,
     linhas: t.linhas.slice(desde),
   });

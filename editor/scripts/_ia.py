@@ -5,6 +5,25 @@ import json
 import urllib.error
 import urllib.request
 
+class IaIndisponivel(Exception):
+    """A IA escolhida não pode ser usada agora (sem créditos, sem login, Ollama fechado...).
+
+    Quem tem um modo sem IA (dicionário/heurística) usa ele e avisa; quem não tem
+    (dublagem) mostra a mensagem."""
+
+
+SEM_CREDITOS = (
+    "a conta da API do Claude está sem créditos. A assinatura do Claude (Pro/Max) não inclui a API: "
+    "adicione créditos em platform.claude.com > Billing (US$ 5 rendem centenas de vídeos) ou troque a "
+    "Inteligência para \"Sem IA\" ou \"Ollama\"."
+)
+
+
+def avisar_sem_ia(erro: IaIndisponivel) -> None:
+    # O Studio mostra linhas "AVISO:" como alerta amarelo no fim da tarefa.
+    print(f"AVISO: {erro} Desta vez usei o modo sem IA.")
+
+
 PADRAO_OLLAMA = "qwen2.5:7b"
 PADRAO_CLAUDE = "claude-opus-5"
 
@@ -47,7 +66,7 @@ def por_ollama(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
         with urllib.request.urlopen(req, timeout=600) as r:
             return json.loads(json.loads(r.read())["message"]["content"])
     except urllib.error.URLError as e:
-        raise SystemExit(
+        raise IaIndisponivel(
             f"Não consegui falar com o Ollama ({e}). Instale em https://ollama.com, "
             f"rode `ollama pull {modelo}` e deixe o Ollama aberto."
         )
@@ -73,26 +92,25 @@ def por_claude(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
     except (TypeError, anthropic.CredentialsError) as e:
         if isinstance(e, TypeError) and "authentication" not in str(e):
             raise
-        raise SystemExit(
-            "Você não está logado no Claude. Rode `ant auth login` (veja o README) "
-            "ou use --ia dicionario / --ia ollama."
-        )
+        raise IaIndisponivel("Você não está logado no Claude (Configurações > Entrar no Claude).")
     except anthropic.AuthenticationError:
-        raise SystemExit(
-            "O Claude recusou o login. Rode `ant auth login` de novo (o login expira de tempos em tempos). "
+        raise IaIndisponivel(
+            "O Claude recusou o login: entre de novo em Configurações > Entrar no Claude. "
             "Se você tiver ANTHROPIC_API_KEY definida, ela passa na frente do login: apague-a."
         )
     except anthropic.RateLimitError:
-        raise SystemExit("Limite de uso da API atingido; espere um pouco e tente de novo.")
+        raise IaIndisponivel("O Claude atingiu o limite de uso por agora; espere um pouco e tente de novo.")
     except anthropic.APIStatusError as e:
-        raise SystemExit(f"Erro da API ({e.status_code}): {e.message}")
+        if "credit balance" in str(e.message).lower():
+            raise IaIndisponivel(SEM_CREDITOS[0].upper() + SEM_CREDITOS[1:])
+        raise IaIndisponivel(f"O Claude deu erro ({e.status_code}): {e.message}")
     except anthropic.APIConnectionError:
-        raise SystemExit("Sem conexão com a API da Anthropic.")
+        raise IaIndisponivel("Sem conexão com o Claude (verifique a internet).")
 
     if response.stop_reason == "refusal":
-        raise SystemExit("O Claude recusou o pedido; tente --ia dicionario.")
+        raise IaIndisponivel("O Claude recusou o pedido.")
     if response.stop_reason == "max_tokens":
-        raise SystemExit("Resposta cortada (max_tokens); tente um vídeo menor.")
+        raise IaIndisponivel("A resposta do Claude veio cortada (vídeo muito longo).")
     text = next(b.text for b in response.content if b.type == "text")
     u = response.usage
     print(f"(Claude: {u.input_tokens} tokens de entrada, {u.output_tokens} de saída)")

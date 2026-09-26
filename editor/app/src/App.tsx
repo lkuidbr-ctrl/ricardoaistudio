@@ -43,7 +43,7 @@ const gravarLocal = (chave: string, valor: string) => {
   }
 };
 
-type Aviso = { id: number; texto: string; tipo: "ok" | "erro" };
+type Aviso = { id: number; texto: string; tipo: "ok" | "erro" | "alerta" };
 
 export const App: React.FC = () => {
   const [projetos, setProjetos] = useState<Projeto[] | null>(null);
@@ -70,7 +70,7 @@ export const App: React.FC = () => {
   const avisar = useCallback((texto: string, tipo: Aviso["tipo"] = "ok") => {
     const id = Date.now() + Math.random();
     setAvisos((a) => [...a, { id, texto, tipo }]);
-    setTimeout(() => setAvisos((a) => a.filter((x) => x.id !== id)), tipo === "erro" ? 9000 : 4500);
+    setTimeout(() => setAvisos((a) => a.filter((x) => x.id !== id)), tipo === "ok" ? 4500 : 12000);
   }, []);
 
   const setIa = (v: Ia) => {
@@ -159,7 +159,7 @@ export const App: React.FC = () => {
         avisar("Login no Claude concluído.");
         return;
       }
-      avisar(`${t.rotulo}: pronto!`);
+      avisar(t.aviso ? `${t.rotulo}: pronto, mas ${t.aviso[0].toLowerCase()}${t.aviso.slice(1)}` : `${t.rotulo}: pronto!`, t.aviso ? "alerta" : "ok");
       if (t.resultado?.novoProjeto) {
         await carregarProjetos();
         await abrirProjeto(t.resultado.novoProjeto);

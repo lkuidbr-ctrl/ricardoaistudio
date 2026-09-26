@@ -134,7 +134,7 @@ export const ModalConfig: React.FC<{
         <header><h3>Inteligência artificial</h3></header>
         <p className="dica">Usada em legendas com emojis, B-roll automático, clipes e dublagem.</p>
         <select value={ia} onChange={(e) => setIa(e.target.value as Ia)}>
-          <option value="claude">Claude (melhor resultado; usa sua conta)</option>
+          <option value="claude">Claude (melhor resultado; usa créditos da API, pagos à parte)</option>
           <option value="ollama">Ollama (IA local e grátis; precisa instalar o Ollama)</option>
           <option value="dicionario">Sem IA (grátis, resultados simples)</option>
         </select>
@@ -154,7 +154,12 @@ export const ModalConfig: React.FC<{
             {tarefaLogin?.status === "rodando" ? "Aguardando o navegador..." : "Entrar no Claude"}
           </button>
         </header>
-        <p className="dica">O login abre no navegador. Depois de entrar, volte para cá.</p>
+        <p className="dica">
+          O login abre no navegador. O Studio usa a <b>API</b> do Claude, que tem créditos próprios: a assinatura Pro/Max
+          não vale aqui. Adicione créditos em{" "}
+          <a href="https://platform.claude.com/settings/billing" target="_blank" rel="noreferrer">platform.claude.com</a> (US$ 5 rendem
+          centenas de vídeos). Sem créditos, o Studio usa o modo sem IA sozinho.
+        </p>
         <pre className="log">{claude ? claude.texto || "(sem resposta)" : "Verificando..."}</pre>
         {tarefaLogin && tarefaLogin.linhas.length ? <pre className="log">{tarefaLogin.linhas.slice(-8).join("\n")}</pre> : null}
       </section>
