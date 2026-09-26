@@ -11,6 +11,7 @@ Roda **100% no seu computador, de graça**: sem servidor e sem API paga (o Claud
 - **B-roll manual**: imagens ou vídeos por cima, em tela cheia ou em cartão flutuante, com entrada `fade`, `slide`, `zoom` ou `glitch`
 - **Música de fundo com ducking**: abaixa sozinha enquanto você fala
 - **Efeitos sonoros automáticos**: whoosh nas transições e no B-roll, pop nos emojis, glitch no glitch
+- **Reframe automático**: vídeo horizontal vira 9:16 com uma "câmera" que segue o seu rosto
 - **Zoom automático** (punch-in) nos momentos que você escolher
 - Edição visual no **Remotion Studio** (o painel lateral edita tudo) e exportação em MP4 1080x1920
 
@@ -45,6 +46,14 @@ pip install -r scripts/requirements.txt
 ## Fluxo para cada vídeo
 
 1. **Coloque o vídeo** em `editor/public/video.mp4`. Grave em 9:16, ou o editor corta as sobras.
+   Se o vídeo for **horizontal** (podcast, live, gravação de tela com rosto), converta antes:
+   ```bash
+   python scripts/reframe.py public/gravacao.mp4      # gera public/gravacao.vertical.mp4
+   ```
+   A "câmera" fica parada enquanto você está perto do centro e só se move, suave, quando
+   você sai da zona de folga. Ajuste com `--folga 0.12` (menos movimento) ou
+   `--suavidade 2` (movimentos mais lentos). Depois use o `gravacao.vertical.mp4` em todos
+   os próximos passos. Na primeira vez, o script baixa o detector de rostos (~230 KB).
 2. **Gere as legendas** (cerca de 10 s para 1 minuto de vídeo):
    ```bash
    python scripts/transcribe.py public/video.mp4
@@ -140,6 +149,7 @@ src/
   effects/Sound         música com ducking e efeitos sonoros
   timeline.ts           converte tempos do original para o vídeo cortado
 scripts/
+  reframe.py            horizontal -> vertical seguindo o rosto (YuNet, OpenCV)
   transcribe.py         Whisper local -> legendas com tempo por palavra
   cut.py                silêncios e "éé" -> trechos que ficam (video.cuts.json)
   enrich.py             destaques e emojis (dicionário, Ollama ou Claude)
@@ -152,4 +162,4 @@ scripts/
 ## Licenças
 
 - O Remotion é gratuito para uso individual (veja remotion.dev/license).
-- Whisper, Robust Video Matting e as fontes (OFL) são gratuitos.
+- Whisper, Robust Video Matting, o detector de rostos YuNet (MIT) e as fontes (OFL) são gratuitos.
