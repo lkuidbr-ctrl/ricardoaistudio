@@ -48,6 +48,21 @@ function MarcarFeito([string]$chave, [string]$impressao) {
     $Estado | ConvertTo-Json | Set-Content $ArquivoEstado -Encoding UTF8
 }
 
+# Roda um programa e devolve o código de saída e tudo o que ele escreveu. No PowerShell do
+# Windows, com $ErrorActionPreference = 'Stop', qualquer texto na saída de erro (como um
+# "Traceback" do Python) derrubaria o instalador; aqui isso é só lido, não vira erro.
+function Saida([scriptblock]$comando) {
+    $anterior = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $linhas = @(& $comando 2>&1 | ForEach-Object { "$_" })
+        $codigo = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $anterior
+    }
+    return [pscustomobject]@{ Codigo = $codigo; Linhas = $linhas; Ultima = ($linhas | Where-Object { $_.Trim() } | Select-Object -Last 1) }
+}
+
 function Rodar([string]$descricao, [scriptblock]$comando) {
     & $comando
     if ($LASTEXITCODE -ne 0) { throw "$descricao falhou (código $LASTEXITCODE)." }
@@ -193,11 +208,29 @@ try {
         $querCuda = $false
     }
 
-    # PyTorch: instala se não houver; troca se for do tipo errado (ex.: CUDA de uma
-    # instalação antiga numa placa fraca); se já estiver certo, não mexe (economiza minutos).
-    $atual = & $venvPy -c "import torch, torchvision; print('cuda' if torch.version.cuda else 'cpu')" 2>$null
+    # O PyTorch (e outras IAs) precisam do "Microsoft Visual C++ Redistributable"; sem ele,
+    # o "import torch" falha com erro de DLL.
+    $sistema = Join-Path $env:WINDIR 'System32'
+    if (-not (Test-Path (Join-Path $sistema 'vcruntime140_1.dll')) -or -not (Test-Path (Join-Path $sistema 'msvcp140.dll'))) {
+        try {
+            Winget-Instalar 'Microsoft.VCRedist.2015+.x64' 'Microsoft Visual C++ (necessário para a IA)'
+        } catch {
+            Aviso "Não consegui instalar o Visual C++: $($_.Exception.Message)"
+        }
+    }
+
+    # PyTorch: instala se não houver; reinstala se estiver quebrado ou for do tipo errado
+    # (ex.: CUDA numa placa fraca); se já estiver certo, não mexe (economiza minutos).
+    $testeTorch = { & $venvPy -c "import torch, torchvision; print('cuda' if torch.version.cuda else 'cpu')" }
+    $teste = Saida $testeTorch
+    $atual = if ($teste.Codigo -eq 0) { "$($teste.Ultima)".Trim() } else { $null }
+    $instalado = (Saida { & $venvPy -m pip show torch }).Codigo -eq 0
     $mexeu = $false
-    if ($LASTEXITCODE -ne 0 -or -not $atual) {
+    if (-not $atual -and $instalado) {
+        Write-Host "    O PyTorch está instalado mas não abre ($($teste.Ultima)). Reinstalando..."
+        Rodar 'Reinstalar o PyTorch' { & $venvPy -m pip install --force-reinstall torch torchvision --index-url $indice }
+        $mexeu = $true
+    } elseif (-not $atual) {
         Rodar 'Instalar o PyTorch' { & $venvPy -m pip install torch torchvision --index-url $indice }
         $mexeu = $true
     } elseif (($atual -eq 'cuda') -ne $querCuda) {
@@ -206,6 +239,16 @@ try {
         $mexeu = $true
     } else {
         Ok "PyTorch ($atual) já instalado"
+    }
+    if ($mexeu) {
+        $teste = Saida $testeTorch
+        if ($teste.Codigo -eq 0) {
+            Ok "PyTorch ($("$($teste.Ultima)".Trim())) funcionando"
+        } else {
+            # Só o "Recortar a pessoa" depende do PyTorch: o resto do Studio segue funcionando.
+            Aviso "O PyTorch não abre: $($teste.Ultima)"
+            Aviso 'O "Recortar a pessoa" não vai funcionar até isso ser resolvido; o resto funciona. Mande um print para o Claude.'
+        }
     }
 
     $impPip = Impressao @('scripts\requirements.txt')
@@ -219,7 +262,7 @@ try {
     }
     if ($mexeu) {
         # Os instaladores baixados ficam guardados no cache do pip (podem passar de 2 GB): apaga.
-        & $venvPy -m pip cache purge 2>$null | Out-Null
+        Saida { & $venvPy -m pip cache purge } | Out-Null
     }
 
     # ---------------------------------------------------------------- ant (login do Claude)
