@@ -115,13 +115,25 @@ export const ModalConfig: React.FC<{
     get<{ versao: string | null; git: boolean }>("/api/versao").then(setVersao).catch(() => {});
   }, [tarefaAtualizar?.status]);
   const [claude, setClaude] = useState<{ instalado: boolean; texto: string } | null>(null);
-  const [temPexels, setTemPexels] = useState(false);
+  const [cfg, setCfg] = useState<{ temPexels: boolean; temClaude: boolean; claudeFinal: string; claudeModelo: string } | null>(null);
   const [chave, setChave] = useState("");
   const [salvo, setSalvo] = useState(false);
+  const [chaveClaude, setChaveClaude] = useState("");
+  const [teste, setTeste] = useState<{ ok: boolean; motivo?: string; aviso?: string } | "testando" | null>(null);
+  const [mostrarLogin, setMostrarLogin] = useState(false);
+  const temPexels = Boolean(cfg?.temPexels);
 
   const atualizar = () => {
     get<{ instalado: boolean; texto: string }>("/api/claude").then(setClaude).catch(() => {});
-    get<{ temPexels: boolean }>("/api/config").then((c) => setTemPexels(c.temPexels)).catch(() => {});
+    get<typeof cfg>("/api/config").then(setCfg).catch(() => {});
+  };
+  const testar = async () => {
+    setTeste("testando");
+    try {
+      setTeste(await enviar<{ ok: boolean; motivo?: string; aviso?: string }>("POST", "/api/claude/testar"));
+    } catch (e) {
+      setTeste({ ok: false, motivo: (e as Error).message });
+    }
   };
   useEffect(atualizar, []);
   useEffect(() => {
@@ -142,26 +154,100 @@ export const ModalConfig: React.FC<{
 
       <section className="secao">
         <header>
-          <h3>Conta do Claude</h3>
-          <button
-            className="botao primario pequeno"
-            disabled={tarefaLogin?.status === "rodando"}
-            onClick={async () => {
-              const { id } = await enviar<{ id: string }>("POST", "/api/claude/login");
-              aoLogin(id);
-            }}
-          >
-            {tarefaLogin?.status === "rodando" ? "Aguardando o navegador..." : "Entrar no Claude"}
-          </button>
+          <h3>Claude (chave da API)</h3>
+          {cfg?.temClaude ? <span className="selo ok">✓ chave ...{cfg.claudeFinal}</span> : null}
         </header>
         <p className="dica">
-          O login abre no navegador. O Studio usa a <b>API</b> do Claude, que tem créditos próprios: a assinatura Pro/Max
-          não vale aqui. Adicione créditos em{" "}
-          <a href="https://platform.claude.com/settings/billing" target="_blank" rel="noreferrer">platform.claude.com</a> (US$ 5 rendem
-          centenas de vídeos). Sem créditos, o Studio usa o modo sem IA sozinho.
+          Crie uma chave em{" "}
+          <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noreferrer">platform.claude.com → API Keys</a> e cole
+          aqui. A API tem créditos próprios (a assinatura Pro/Max não vale aqui): adicione em{" "}
+          <a href="https://platform.claude.com/settings/billing" target="_blank" rel="noreferrer">Billing</a>. US$ 5 rendem centenas de
+          vídeos. A chave fica salva só no seu computador.
         </p>
-        <pre className="log">{claude ? claude.texto || "(sem resposta)" : "Verificando..."}</pre>
-        {tarefaLogin && tarefaLogin.linhas.length ? <pre className="log">{tarefaLogin.linhas.slice(-8).join("\n")}</pre> : null}
+        <div className="linha-form">
+          <input
+            type="password"
+            placeholder={cfg?.temClaude ? `•••••••• (já salva, termina em ${cfg.claudeFinal})` : "sk-ant-..."}
+            value={chaveClaude}
+            onChange={(e) => {
+              setChaveClaude(e.target.value);
+              setTeste(null);
+            }}
+          />
+          <button
+            className="botao primario"
+            disabled={!chaveClaude.trim()}
+            onClick={async () => {
+              await enviar("PUT", "/api/config", { claudeKey: chaveClaude });
+              setChaveClaude("");
+              atualizar();
+              testar();
+            }}
+          >
+            Salvar e testar
+          </button>
+        </div>
+        <div className="linha-form">
+          <button className="botao secundario pequeno" disabled={teste === "testando"} onClick={testar}>
+            {teste === "testando" ? "Testando..." : "Testar conexão"}
+          </button>
+          {cfg?.temClaude ? (
+            <button
+              className="botao fantasma pequeno"
+              onClick={async () => {
+                await enviar("PUT", "/api/config", { claudeKey: "" });
+                setTeste(null);
+                atualizar();
+              }}
+            >
+              Remover chave
+            </button>
+          ) : null}
+        </div>
+        {teste && teste !== "testando" ? (
+          teste.ok ? (
+            <p className="ok-texto">✓ Claude funcionando{teste.aviso ? ` (${teste.aviso})` : ""}.</p>
+          ) : (
+            <p className="alerta">{teste.motivo}</p>
+          )
+        ) : null}
+        <label className="linha" style={{ marginTop: 12 }}>
+          <span className="rotulo">Modelo</span>
+          <select
+            value={cfg?.claudeModelo ?? "claude-opus-5"}
+            onChange={async (e) => {
+              await enviar("PUT", "/api/config", { claudeModelo: e.target.value });
+              atualizar();
+            }}
+          >
+            <option value="claude-opus-5">Opus 5 (melhor resultado; alguns centavos de dólar por vídeo)</option>
+            <option value="claude-sonnet-5">Sonnet 5 (equilibrado; menos da metade do custo)</option>
+            <option value="claude-haiku-4-5">Haiku 4.5 (mais barato; cerca de 1/5 do custo)</option>
+          </select>
+        </label>
+        {!cfg?.temClaude ? (
+          <>
+            <button className="link pequeno" onClick={() => setMostrarLogin((v) => !v)}>
+              {mostrarLogin ? "Esconder" : "Prefere entrar com login em vez de chave?"}
+            </button>
+            {mostrarLogin ? (
+              <div style={{ marginTop: 8 }}>
+                <button
+                  className="botao secundario pequeno"
+                  disabled={tarefaLogin?.status === "rodando"}
+                  onClick={async () => {
+                    const { id } = await enviar<{ id: string }>("POST", "/api/claude/login");
+                    aoLogin(id);
+                  }}
+                >
+                  {tarefaLogin?.status === "rodando" ? "Aguardando o navegador..." : "Entrar no Claude"}
+                </button>
+                <pre className="log">{claude ? claude.texto || "(sem resposta)" : "Verificando..."}</pre>
+                {tarefaLogin && tarefaLogin.linhas.length ? <pre className="log">{tarefaLogin.linhas.slice(-8).join("\n")}</pre> : null}
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </section>
 
       <section className="secao">

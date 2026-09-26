@@ -69,6 +69,25 @@ const semColisao = (pasta, nome) => {
 
 const config = () => lerJson(CONFIG, {});
 
+// Chaves salvas nas Configurações, passadas só para os scripts que o Studio roda.
+// A chave do Claude tem prioridade sobre o login (ant auth login).
+const envDasChaves = () => {
+  const c = config();
+  return {
+    ...(c.pexelsKey ? { PEXELS_API_KEY: c.pexelsKey } : {}),
+    ...(c.claudeKey ? { ANTHROPIC_API_KEY: c.claudeKey } : {}),
+  };
+};
+
+const MODELOS_CLAUDE = new Set(["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"]);
+
+// Argumentos de IA para os scripts: --ia e, com o Claude, o modelo escolhido nas Configurações.
+const argsIa = (o) => {
+  const ia = o.ia || "claude";
+  const modelo = config().claudeModelo;
+  return ["--ia", ia, ...(ia === "claude" && MODELOS_CLAUDE.has(modelo) ? ["--modelo", modelo] : [])];
+};
+
 const pythonExe = () => {
   if (process.env.EDITOR_PYTHON) return process.env.EDITOR_PYTHON;
   const venv = WIN ? path.join(EDITOR, ".venv", "Scripts", "python.exe") : path.join(EDITOR, ".venv", "bin", "python");
@@ -281,12 +300,12 @@ const FERRAMENTAS = {
   },
   emojis: {
     rotulo: "Emojis e destaques",
-    args: (v, o) => [py("enrich.py"), v, "--ia", o.ia || "claude"],
+    args: (v, o) => [py("enrich.py"), v, ...argsIa(o)],
     extra: () => ({ emojis: true }),
   },
   broll: {
     rotulo: "B-roll automático",
-    args: (v, o) => [py("broll.py"), v, "--ia", o.ia || "claude"],
+    args: (v, o) => [py("broll.py"), v, ...argsIa(o)],
     campo: "brollFile",
   },
   recortar: {
@@ -301,13 +320,13 @@ const FERRAMENTAS = {
   },
   dublar: {
     rotulo: "Dublar",
-    args: (v, o) => [py("voz.py"), "dublar", v, "--idioma", o.idioma || "en", "--ia", o.ia || "claude"],
+    args: (v, o) => [py("voz.py"), "dublar", v, "--idioma", o.idioma || "en", ...argsIa(o)],
     novo: (id, o) => irmao(id, `.${o.idioma || "en"}.mp4`),
   },
   clipes: {
     rotulo: "Gerar clipes",
     args: (v, o) => {
-      const a = [py("clips.py"), v, "--quantos", String(o.quantos || 3), "--ia", o.ia || "claude"];
+      const a = [py("clips.py"), v, "--quantos", String(o.quantos || 3), ...argsIa(o)];
       if (o.vertical) a.push("--vertical");
       if (fs.existsSync(path.join(PUBLIC, "marca.json"))) a.push("--marca", "marca.json");
       return a;
@@ -403,9 +422,8 @@ app.post("/api/tarefas", (req, res) => {
     return res.status(400).json({ erro: "Gere as legendas primeiro (botão \"Gerar legendas\")." });
   }
   const t = novaTarefa(ferramenta, projeto, f.rotulo);
-  const env = config().pexelsKey ? { PEXELS_API_KEY: config().pexelsKey } : {};
   rodar(t, pythonExe(), f.args(noPublic(projeto), opcoes), {
-    env,
+    env: envDasChaves(),
     aoTerminar: () => {
       if (f.campo || f.extra) {
         const cfg = configuracoesDoProjeto(projeto);
@@ -556,15 +574,42 @@ app.put("/api/marca", (req, res) => {
   res.json({ ok: true });
 });
 
+// As chaves nunca voltam para a tela: só se existem e os 4 últimos caracteres.
 app.get("/api/config", (_req, res) => {
   const c = config();
-  res.json({ temPexels: Boolean(c.pexelsKey) });
+  res.json({
+    temPexels: Boolean(c.pexelsKey),
+    temClaude: Boolean(c.claudeKey),
+    claudeFinal: c.claudeKey ? c.claudeKey.slice(-4) : "",
+    claudeModelo: MODELOS_CLAUDE.has(c.claudeModelo) ? c.claudeModelo : "claude-opus-5",
+  });
 });
 app.put("/api/config", (req, res) => {
   const c = config();
-  if (typeof req.body?.pexelsKey === "string") c.pexelsKey = req.body.pexelsKey.trim();
+  const b = req.body || {};
+  if (typeof b.pexelsKey === "string") c.pexelsKey = b.pexelsKey.trim();
+  if (typeof b.claudeKey === "string") c.claudeKey = b.claudeKey.trim();
+  if (typeof b.claudeModelo === "string" && MODELOS_CLAUDE.has(b.claudeModelo)) c.claudeModelo = b.claudeModelo;
   salvarJson(CONFIG, c);
   res.json({ ok: true });
+});
+
+// Testa se o Claude funciona (chave válida e com créditos) com um pedido mínimo.
+app.post("/api/claude/testar", (_req, res) => {
+  const r = spawnSync(pythonExe(), [py("testar_claude.py")], {
+    cwd: EDITOR,
+    encoding: "utf-8",
+    timeout: 60000,
+    windowsHide: true,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8", ...envDasChaves() },
+  });
+  const linha = (r.stdout || "").trim().split(/\r?\n/).pop() || "";
+  try {
+    res.json(JSON.parse(linha));
+  } catch {
+    const erro = `${r.stderr || ""}${r.error?.message || ""}`.trim().split(/\r?\n/).pop();
+    res.json({ ok: false, motivo: erro || "Não consegui testar (o Python dos scripts não respondeu)." });
+  }
 });
 
 const antExe = () => {
@@ -572,6 +617,8 @@ const antExe = () => {
   return local && fs.existsSync(local) ? local : "ant";
 };
 app.get("/api/claude", (_req, res) => {
+  const chave = config().claudeKey;
+  if (chave) return res.json({ instalado: true, texto: `Usando a chave da API que termina em ...${chave.slice(-4)}.` });
   const r = spawnSync(antExe(), ["auth", "status"], { encoding: "utf-8", timeout: 15000, windowsHide: true });
   if (r.error) return res.json({ instalado: false, texto: "A ferramenta de login (ant) não está instalada. Rode o instalador." });
   res.json({ instalado: true, texto: `${r.stdout || ""}${r.stderr || ""}`.trim() });

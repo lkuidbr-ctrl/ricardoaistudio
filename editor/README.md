@@ -32,8 +32,12 @@ Outras opções:
 - **Converter para vertical**: transforma um vídeo deitado em 9:16.
 - **Dublar**: dubla o vídeo em inglês, espanhol, francês, italiano ou alemão.
 
-Em **Configurações** você entra na conta do Claude, cola a chave do Pexels e escolhe a IA
-(Claude, Ollama local ou sem IA). Tudo o que você ajusta é salvo sozinho.
+Em **Configurações** você cola a **chave da API do Claude** (com o botão "Testar", que
+confere se ela funciona e se tem créditos), escolhe o modelo (Opus, Sonnet ou Haiku, do melhor
+ao mais barato), cola a chave do Pexels e escolhe a IA (Claude, Ollama local ou sem IA).
+As chaves ficam só no seu computador (`editor/app/config.json`). A API do Claude tem créditos
+próprios, comprados em platform.claude.com; a assinatura Pro/Max não vale para ela. Sem
+créditos, o Studio usa o modo sem IA sozinho e avisa. Tudo o que você ajusta é salvo sozinho.
 
 > Mac/Linux, ou para desenvolver: `npm install`, `npm run app:build` e `npm run app`
 > (endereço: http://localhost:3210). O modo avançado, com todos os campos do editor e
