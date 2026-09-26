@@ -39,7 +39,10 @@ export const shortVideoSchema = z.object({
   // Juntar palavras que caem dentro dessa janela na mesma "página".
   wordsWindowMs: z.number().min(0).max(3000),
   // Palavras que ganham cor/destaque especial (sem acento e caixa não importam).
+  // As escolhidas pelo scripts/enrich.py já vêm marcadas na legenda.
   keywords: z.array(z.string()),
+  // Mostrar os emojis escolhidos pelo scripts/enrich.py.
+  emojis: z.boolean(),
   zooms: z.array(zoomSchema),
   behindTexts: z.array(behindTextSchema),
 });

@@ -3,7 +3,7 @@
 Roda **100% no seu computador, de graça**: nenhuma API paga e nenhum servidor.
 
 - **Legendas animadas** com destaque palavra a palavra: `hormozi`, `karaoke`, `pop`, `neon`, `minimal`
-- **Palavras-chave** coloridas automaticamente
+- **Emojis e palavras-chave escolhidos por IA**: dicionário embutido (grátis), Ollama (IA local, grátis) ou Claude
 - **Texto atrás da pessoa**, com as animações `rise`, `scale`, `slide` e `letters`
 - **Corte automático** de silêncios e vícios ("éé", "hã", "hum"), sem estragar o vídeo original
 - **Zoom automático** (punch-in) nos momentos que você escolher
@@ -53,20 +53,31 @@ pip install -r scripts/requirements.txt
    `cuts` com `video.cuts.json`. O original não é alterado: para desfazer, deixe o campo vazio.
    Para cortes mais agressivos use `--max-silence 250`; para cortar também "tipo" e "né", use
    `--filler tipo --filler né`.
-4. **Recorte a pessoa** (só se for usar o texto atrás da pessoa):
+4. **Emojis e destaques** (opcional):
+   ```bash
+   python scripts/enrich.py public/video.mp4                # dicionário: grátis e instantâneo
+   python scripts/enrich.py public/video.mp4 --ia ollama    # IA local grátis (instale o Ollama e rode `ollama pull qwen2.5:7b`)
+   python scripts/enrich.py public/video.mp4 --ia claude    # o mais esperto; precisa de ANTHROPIC_API_KEY
+   ```
+   Isso marca as palavras de destaque e os emojis dentro do `video.captions.json`. Dá para
+   trocar ou apagar um emoji editando o arquivo (campo `"emoji"`). No Studio, o campo `emojis`
+   liga e desliga os emojis.
+   Com o Claude, um vídeo de 1 minuto custa poucos centavos de dólar; para gastar ainda
+   menos, use `--modelo claude-haiku-4-5`.
+5. **Recorte a pessoa** (só se for usar o texto atrás da pessoa):
    ```bash
    python scripts/segment.py public/video.mp4
    ```
    Isso cria `public/video.person.webm`. Na CPU leva uns 2 minutos para 12 s de vídeo;
    com GPU NVIDIA ou Mac M1+ é bem mais rápido.
-5. **Edite no Studio**:
+6. **Edite no Studio**:
    ```bash
    npm run studio
    ```
    No painel da direita você troca o estilo da legenda, as cores, as palavras-chave, os zooms
    e os textos atrás da pessoa (texto, momento, animação, cor, altura e tamanho). O preview
    atualiza na hora.
-6. **Exporte** pelo botão *Render* do Studio ou com `npm run render` (o arquivo sai em `out/video.mp4`).
+7. **Exporte** pelo botão *Render* do Studio ou com `npm run render` (o arquivo sai em `out/video.mp4`).
 
 Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os campos
 `video`, `captions` e `person` no painel. Se não quiser legenda ou recorte, deixe o campo vazio.
@@ -79,7 +90,8 @@ Para editar outro vídeo, use outros nomes (`public/aula1.mp4` etc.) e troque os
 | `captionStyle` | `hormozi` (caixa alta, amarelo), `karaoke` (fundo na palavra falada), `pop` (uma palavra por vez, gigante), `neon` (brilho), `minimal` (discreto, com caixa) |
 | `captionY` | Altura da legenda em %. O padrão é 72, acima da interface do TikTok e do Reels |
 | `wordsWindowMs` | Quantas palavras aparecem juntas (maior = mais palavras por tela) |
-| `keywords` | Palavras que sempre ficam com a cor de destaque |
+| `keywords` | Palavras extras que sempre ficam com a cor de destaque (somam às do `enrich.py`) |
+| `emojis` | Liga e desliga os emojis do `enrich.py` |
 | `zooms` | `atMs` (quando), `durationMs` (por quanto tempo), `scale` (1.2 = 20% de zoom) |
 | `behindTexts` | `y` em % da altura (20-30 fica atrás da cabeça), `fontSize` de 250 a 400 para o efeito ficar bom |
 
@@ -101,6 +113,7 @@ src/
 scripts/
   transcribe.py         Whisper local -> legendas com tempo por palavra
   cut.py                silêncios e "éé" -> trechos que ficam (video.cuts.json)
+  enrich.py             destaques e emojis (dicionário, Ollama ou Claude)
   segment.py            Robust Video Matting -> pessoa com fundo transparente
 ```
 

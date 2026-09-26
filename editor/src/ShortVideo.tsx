@@ -1,4 +1,3 @@
-import type { Caption } from "@remotion/captions";
 import React, { useMemo } from "react";
 import { AbsoluteFill, Sequence, useVideoConfig } from "remotion";
 import { Captions } from "./captions/Captions";
@@ -6,7 +5,7 @@ import { AutoZoom } from "./effects/AutoZoom";
 import { BehindText } from "./effects/BehindText";
 import { CutVideo } from "./effects/CutVideo";
 import type { ShortVideoProps } from "./schema";
-import { buildTimeline, remapCaptions, type CutsFile } from "./timeline";
+import { buildTimeline, remapCaptions, type CutsFile, type EnrichedCaption } from "./timeline";
 import { useJson } from "./useJson";
 
 // Camadas, de baixo para cima:
@@ -17,7 +16,7 @@ import { useJson } from "./useJson";
 // As camadas 1-3 ficam dentro do AutoZoom para o zoom não desalinhar o recorte.
 export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
   const { fps, durationInFrames } = useVideoConfig();
-  const rawCaptions = useJson<Caption[]>(props.captions);
+  const rawCaptions = useJson<EnrichedCaption[]>(props.captions);
   const cuts = useJson<CutsFile>(props.cuts);
 
   const timeline = useMemo(

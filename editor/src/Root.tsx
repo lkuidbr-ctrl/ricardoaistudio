@@ -51,6 +51,7 @@ export const defaultProps: ShortVideoProps = {
   captionY: 72,
   wordsWindowMs: 900,
   keywords: [],
+  emojis: true,
   zooms: [{ atMs: 2000, durationMs: 1500, scale: 1.25 }],
   behindTexts: [
     {

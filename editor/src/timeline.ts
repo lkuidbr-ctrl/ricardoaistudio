@@ -43,9 +43,12 @@ export const buildTimeline = (keep: KeepRange[] | null, fps: number, srcFrames: 
   return { segments, totalFrames: Math.max(1, out), joins: segments.slice(1).map((s) => s.outFrom), locate };
 };
 
+// Legenda com os campos opcionais que o scripts/enrich.py adiciona.
+export type EnrichedCaption = Caption & { highlight?: boolean; emoji?: string };
+
 // Move as legendas para o tempo do vídeo editado; palavras cortadas somem.
-export const remapCaptions = (captions: Caption[], timeline: Timeline): Caption[] => {
-  const result: Caption[] = [];
+export const remapCaptions = (captions: EnrichedCaption[], timeline: Timeline): EnrichedCaption[] => {
+  const result: EnrichedCaption[] = [];
   for (const c of captions) {
     const hit = timeline.locate(c.startMs);
     if (!hit) continue;

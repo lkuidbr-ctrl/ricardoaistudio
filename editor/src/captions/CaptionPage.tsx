@@ -10,6 +10,8 @@ export type CaptionLook = {
   highlightColor: string;
   y: number;
   keywords: Set<string>;
+  highlightAt: Set<number>; // início (ms) das palavras marcadas pelo enrich.py
+  emojiAt: Map<number, string>; // início (ms) da palavra -> emoji
 };
 
 export const normalizeWord = (w: string) =>
@@ -114,10 +116,14 @@ export const CaptionPage: React.FC<{ page: TikTokPage; look: CaptionLook }> = ({
       token,
       active: nowMs >= token.fromMs && nowMs < token.toMs,
       spoken: nowMs >= token.toMs,
-      keyword: look.keywords.has(normalizeWord(token.text)),
+      keyword: look.highlightAt.has(token.fromMs) || look.keywords.has(normalizeWord(token.text)),
       pop: spring({ frame: frame - startFrame, fps, config: { damping: 10, stiffness: 200 } }),
     };
   });
+
+  const emoji = (
+    <Emoji page={page} look={look} nowMs={nowMs} fontSize={Number(fontFor[look.style].fontSize)} />
+  );
 
   const entrance = spring({ frame, fps, config: { damping: 12, stiffness: 180 }, durationInFrames: 10 });
 
@@ -151,6 +157,7 @@ export const CaptionPage: React.FC<{ page: TikTokPage; look: CaptionLook }> = ({
             {current.token.text.trim()}
           </span>
         </div>
+        {emoji}
       </AbsoluteFill>
     );
   }
@@ -175,6 +182,46 @@ export const CaptionPage: React.FC<{ page: TikTokPage; look: CaptionLook }> = ({
           {words.map((w, i) => renderWord(w, look, i))}
         </span>
       </div>
+      {emoji}
     </AbsoluteFill>
+  );
+};
+
+// Emoji da palavra mais recente da página que tenha um: "pula" quando a palavra
+// é falada e fica flutuando acima da legenda até a página acabar.
+const Emoji: React.FC<{ page: TikTokPage; look: CaptionLook; nowMs: number; fontSize: number }> = ({
+  page,
+  look,
+  nowMs,
+  fontSize,
+}) => {
+  const { fps } = useVideoConfig();
+  const token = page.tokens.findLast((t) => t.fromMs <= nowMs && look.emojiAt.has(t.fromMs));
+  if (!token) return null;
+
+  const since = ((nowMs - token.fromMs) / 1000) * fps;
+  const pop = spring({ frame: since, fps, config: { damping: 9, stiffness: 160 } });
+  const float = Math.sin(since / 8) * 8;
+  const tilt = (token.fromMs / 7) % 2 > 1 ? 10 : -10;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: `${look.y}%`,
+        left: 0,
+        right: 0,
+        textAlign: "center",
+        // Acima da legenda: meia linha + folga, proporcional ao tamanho da fonte.
+        translate: `0 calc(-50% - ${fontSize * 1.25 + 60}px)`,
+        fontSize: 140,
+        lineHeight: 1,
+        fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
+        transform: `translateY(${float}px) scale(${pop}) rotate(${tilt * (1 - pop) + tilt / 3}deg)`,
+        filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.45))",
+      }}
+    >
+      {look.emojiAt.get(token.fromMs)}
+    </div>
   );
 };

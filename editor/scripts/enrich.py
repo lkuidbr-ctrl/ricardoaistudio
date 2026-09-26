@@ -1,0 +1,193 @@
+"""Escolhe palavras-chave para destacar e emojis para as legendas.
+
+Uso:
+    python scripts/enrich.py public/video.mp4                      # dicionário embutido (grátis, instantâneo)
+    python scripts/enrich.py public/video.mp4 --ia ollama          # IA local (grátis, precisa do Ollama)
+    python scripts/enrich.py public/video.mp4 --ia claude          # Claude (melhor, centavos por vídeo)
+
+Grava os campos "highlight" e "emoji" dentro do public/video.captions.json.
+Você pode abrir o arquivo e mudar/apagar qualquer emoji à mão.
+"""
+
+import argparse
+import json
+import re
+import unicodedata
+import urllib.request
+from pathlib import Path
+
+from _common import output_path
+
+INSTRUCOES = """Você é editor de vídeos curtos virais (Reels/TikTok) em português.
+Abaixo está a transcrição, uma palavra por linha, no formato "índice: palavra".
+
+Escolha:
+1. "destaques": as palavras de maior impacto (números, dinheiro, resultados, emoções,
+   palavras fortes, nomes). Cerca de 1 a cada 6 palavras. Nunca artigos, preposições ou pronomes.
+2. "emojis": emojis para algumas palavras-chave (cerca de 1 a cada 10 palavras), sempre
+   um único emoji que combine com o sentido da palavra no contexto da frase.
+   Não repita o mesmo emoji em palavras vizinhas.
+
+Use apenas os índices da lista."""
+
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "destaques": {"type": "array", "items": {"type": "integer"}},
+        "emojis": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"indice": {"type": "integer"}, "emoji": {"type": "string"}},
+                "required": ["indice", "emoji"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["destaques", "emojis"],
+    "additionalProperties": False,
+}
+
+# Dicionário para o modo sem IA: raiz da palavra (sem acento) -> emoji.
+DICIONARIO = {
+    "dinheir": "💰", "grana": "💰", "reais": "💵", "lucr": "📈", "venda": "🛒", "vend": "🛒",
+    "ganh": "🤑", "rico": "🤑", "milh": "💸", "mil": "💸", "caro": "💸", "barat": "🏷️", "gratis": "🆓",
+    "viral": "🚀", "virais": "🚀", "cresc": "📈", "result": "📊", "sucesso": "🏆", "venc": "🏆", "meta": "🎯",
+    "objetivo": "🎯", "foco": "🎯", "ideia": "💡", "dica": "💡", "segredo": "🤫", "aprend": "🧠", "estud": "📚",
+    "facil": "✅", "rapid": "⚡", "tempo": "⏰", "hoje": "📅", "agora": "⏰", "fogo": "🔥", "incrivel": "🤯",
+    "insano": "🤯", "loucura": "🤯", "amor": "❤️", "ama": "❤️", "feliz": "😄", "triste": "😢", "medo": "😱",
+    "erro": "❌", "errad": "❌", "nunca": "🚫", "problema": "⚠️", "cuidado": "⚠️", "atencao": "👀", "olha": "👀",
+    "video": "🎬", "videos": "🎬", "celular": "📱", "instagram": "📸", "tiktok": "🎵", "youtube": "▶️",
+    "trabalh": "💼", "empresa": "🏢", "negocio": "💼", "cliente": "🤝", "comida": "🍔", "academia": "💪",
+    "treino": "💪", "forte": "💪", "saude": "🩺", "casa": "🏠", "carro": "🚗", "viagem": "✈️", "mundo": "🌎",
+    "ola": "👋", "oi": "👋", "obrigad": "🙏", "bora": "🚀", "segue": "➕", "curte": "👍", "comenta": "💬",
+}
+PALAVRAS_FRACAS = set(
+    "a o as os um uma uns umas de da do das dos em na no nas nos por para pra pro com sem e ou mas que "
+    "se eu tu ele ela nos vos eles elas me te lhe isso isto esse essa este esta aquele aquela ja "
+    "muito mais menos bem so tambem ai la aqui como quando onde qual quem ne tipo entao vou vai sou".split()
+)
+
+
+def normalize(word: str) -> str:
+    word = unicodedata.normalize("NFD", word)
+    word = "".join(c for c in word if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^\w]", "", word.lower())
+
+
+def por_dicionario(words: list[str]) -> dict:
+    destaques, emojis, ultimo = [], [], -99
+    for i, w in enumerate(words):
+        n = normalize(w)
+        if not n or n in PALAVRAS_FRACAS:
+            continue
+        emoji = next((e for raiz, e in DICIONARIO.items() if n == raiz or (len(raiz) >= 4 and n.startswith(raiz))), None)
+        if emoji or n.isdigit():
+            destaques.append(i)
+        if emoji and i - ultimo >= 5:  # no máximo um emoji a cada 5 palavras
+            emojis.append({"indice": i, "emoji": emoji})
+            ultimo = i
+    return {"destaques": destaques, "emojis": emojis}
+
+
+def por_ollama(texto: str, modelo: str) -> dict:
+    body = {
+        "model": modelo,
+        "stream": False,
+        "format": SCHEMA,
+        "options": {"temperature": 0.3},
+        "messages": [{"role": "system", "content": INSTRUCOES}, {"role": "user", "content": texto}],
+    }
+    req = urllib.request.Request(
+        "http://localhost:11434/api/chat",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=600) as r:
+            return json.loads(json.loads(r.read())["message"]["content"])
+    except urllib.error.URLError as e:
+        raise SystemExit(
+            f"Não consegui falar com o Ollama ({e}). Instale em https://ollama.com, "
+            f"rode `ollama pull {modelo}` e deixe o Ollama aberto."
+        )
+
+
+def por_claude(texto: str, modelo: str) -> dict:
+    import anthropic
+
+    # Lê a chave de ANTHROPIC_API_KEY (ou do login feito com `ant auth login`).
+    client = anthropic.Anthropic()
+    try:
+        response = client.beta.messages.create(
+            model=modelo,
+            max_tokens=16000,
+            system=INSTRUCOES,
+            messages=[{"role": "user", "content": texto}],
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}},
+            # Se o modelo recusar o pedido, a própria API tenta de novo com o modelo reserva recomendado.
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+        )
+    except TypeError as e:
+        if "authentication" not in str(e):
+            raise
+        raise SystemExit("Falta a chave do Claude: defina ANTHROPIC_API_KEY (https://platform.claude.com).")
+    except anthropic.AuthenticationError:
+        raise SystemExit("Chave inválida. Defina ANTHROPIC_API_KEY (https://platform.claude.com).")
+    except anthropic.RateLimitError:
+        raise SystemExit("Limite de uso da API atingido; espere um pouco e tente de novo.")
+    except anthropic.APIStatusError as e:
+        raise SystemExit(f"Erro da API ({e.status_code}): {e.message}")
+    except anthropic.APIConnectionError:
+        raise SystemExit("Sem conexão com a API da Anthropic.")
+
+    if response.stop_reason == "refusal":
+        raise SystemExit("O Claude recusou o pedido; tente --ia dicionario.")
+    if response.stop_reason == "max_tokens":
+        raise SystemExit("Resposta cortada (max_tokens); tente um vídeo menor.")
+    text = next(b.text for b in response.content if b.type == "text")
+    u = response.usage
+    print(f"(Claude: {u.input_tokens} tokens de entrada, {u.output_tokens} de saída)")
+    return json.loads(text)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("video", type=Path)
+    parser.add_argument("--ia", choices=["dicionario", "ollama", "claude"], default="dicionario")
+    parser.add_argument("--modelo", help="modelo do Ollama (padrão qwen2.5:7b) ou do Claude (padrão claude-opus-5)")
+    args = parser.parse_args()
+
+    captions_file = output_path(args.video, ".captions.json")
+    if not captions_file.exists():
+        raise SystemExit(f"Não achei {captions_file}. Rode antes: python scripts/transcribe.py {args.video}")
+    captions = json.loads(captions_file.read_text(encoding="utf-8"))
+    words = [c["text"].strip() for c in captions]
+    texto = "\n".join(f"{i}: {w}" for i, w in enumerate(words))
+
+    if args.ia == "ollama":
+        result = por_ollama(texto, args.modelo or "qwen2.5:7b")
+    elif args.ia == "claude":
+        result = por_claude(texto, args.modelo or "claude-opus-5")
+    else:
+        result = por_dicionario(words)
+
+    destaques = {i for i in result["destaques"] if 0 <= i < len(captions)}
+    emojis = {e["indice"]: e["emoji"].strip() for e in result["emojis"] if 0 <= e["indice"] < len(captions) and e["emoji"].strip()}
+    for i, c in enumerate(captions):
+        c.pop("highlight", None)
+        c.pop("emoji", None)
+        if i in destaques or i in emojis:
+            c["highlight"] = True
+        if i in emojis:
+            c["emoji"] = emojis[i]
+
+    captions_file.write_text(json.dumps(captions, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(" ".join(f"[{w}]" if i in destaques else w for i, w in enumerate(words)))
+    print("emojis: " + ", ".join(f"{words[i]} {e}" for i, e in sorted(emojis.items())))
+    print(f"-> {captions_file}")
+
+
+if __name__ == "__main__":
+    main()

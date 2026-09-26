@@ -1,10 +1,11 @@
-import { createTikTokStyleCaptions, type Caption } from "@remotion/captions";
+import { createTikTokStyleCaptions } from "@remotion/captions";
 import React, { useMemo } from "react";
 import { Sequence, useVideoConfig } from "remotion";
 import { CaptionPage, normalizeWord, type CaptionLook } from "./CaptionPage";
 import type { ShortVideoProps } from "../schema";
+import type { EnrichedCaption } from "../timeline";
 
-export const Captions: React.FC<{ captions: Caption[]; props: ShortVideoProps }> = ({ captions, props }) => {
+export const Captions: React.FC<{ captions: EnrichedCaption[]; props: ShortVideoProps }> = ({ captions, props }) => {
   const { fps } = useVideoConfig();
 
   const pages = useMemo(
@@ -18,12 +19,22 @@ export const Captions: React.FC<{ captions: Caption[]; props: ShortVideoProps }>
     [captions, props.captionStyle, props.wordsWindowMs],
   );
 
+  // Os tokens de página guardam o início da palavra (fromMs = startMs), então
+  // dá para achar o destaque/emoji de cada palavra por esse tempo.
+  const highlightAt = useMemo(() => new Set(captions.filter((c) => c.highlight).map((c) => c.startMs)), [captions]);
+  const emojiAt = useMemo(
+    () => new Map(props.emojis ? captions.filter((c) => c.emoji).map((c) => [c.startMs, c.emoji!]) : []),
+    [captions, props.emojis],
+  );
+
   const look: CaptionLook = {
     style: props.captionStyle,
     color: props.captionColor,
     highlightColor: props.highlightColor,
     y: props.captionY,
     keywords: new Set(props.keywords.map(normalizeWord)),
+    highlightAt,
+    emojiAt,
   };
 
   return (
