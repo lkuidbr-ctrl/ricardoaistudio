@@ -16,6 +16,7 @@ export type Tarefa = {
     clipes?: { id: string; titulo: string; nota: number; inicioMs: number; fimMs: number }[];
   };
   linhas: string[];
+  dica?: string | null; // explicação do erro, quando o servidor reconhece o problema
 };
 
 const tratar = async (r: Response) => {
