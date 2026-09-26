@@ -7,24 +7,30 @@ preview ao vivo e exporta o MP4.
 ## Usando o app (recomendado)
 
 1. **Instale** (Windows): dois cliques em `instalar-windows.bat`, na pasta principal do projeto.
-2. **Abra** o atalho **Ricardo AI Studio** na Área de Trabalho. Uma janela preta abre (é o
-   motor do Studio; deixe aberta) e o app aparece no navegador.
+2. **Abra** o atalho **Ricardo AI Studio** na Área de Trabalho (ou no Menu Iniciar). O app
+   abre na própria janela, com ícone, sem janela preta. Ao fechar a janela, o Studio se
+   desliga sozinho (se estiver exportando, ele termina antes e o vídeo fica em `editor\out`).
+   Se algo der errado ao abrir, aparece um aviso e o registro fica em `editor\studio.log`.
 3. **Arraste seu vídeo** para a janela. Vídeos de iPhone (HEVC) são convertidos sozinhos.
 4. Na **coluna da esquerda**, rode as ferramentas na ordem:
    - **Gerar legendas**: sempre o primeiro passo;
    - **Cortar silêncios**: tira pausas e "éé";
    - **Emojis e destaques**: a IA escolhe palavras-chave e emojis;
-   - **B-roll automático**: vídeos grátis do Pexels nos momentos certos;
+   - **B-roll automático**: vídeos grátis do Pexels nos momentos certos. Com o Claude, a IA
+     olha as opções e escolhe a que combina com a frase (ou pula a cena se nenhuma combinar).
+     Na aba **Efeitos** aparece a lista das cenas, e dá para tirar a que não gostar;
    - **Recortar a pessoa**: para o texto ficar atrás de você.
 5. Na **coluna da direita**, ajuste o que quiser. O preview atualiza na hora.
    - **Legenda**: estilo, cores, posição e palavras em destaque.
    - **Textos**: título-gancho e texto atrás da pessoa. O botão "+ no momento atual"
      usa o ponto onde o vídeo está parado.
-   - **Efeitos**: zoom, transição nos cortes e B-roll com os seus arquivos.
+   - **Efeitos**: zoom, transição entre frases (funciona mesmo sem cortar silêncios) e B-roll.
    - **Áudio**: música com volume automático e efeitos sonoros.
-   - **Marca**: cores, logo, @, barra de progresso e tela final.
+   - **Marca**: cores, logo, @, barra de progresso e tela final. Vale para todos os vídeos
+     e liga sozinha quando você preenche.
 6. Clique em **Exportar vídeo**. O arquivo pode ser baixado na hora e também fica salvo
-   em `editor\out`.
+   em `editor\out`. Se faltar memória, o Studio tenta de novo sozinho, mais devagar; se
+   mesmo assim falhar, o erro fica em `editor\out\<nome>.log`.
 
 Outras opções:
 - **Narrar roteiro**, no topo: cria um vídeo a partir de um texto, com voz por IA.
@@ -74,10 +80,8 @@ os quadros. O recorte é colocado por cima do texto, então o texto parece estar
    (com aceleração se você tiver placa NVIDIA) e a ferramenta de login do Claude.
    No fim, abre o navegador para você entrar na conta do Claude e pede a chave do Pexels
    (opcional).
-4. Pronto: aparecem dois atalhos na Área de Trabalho.
-   - **Ricardo AI Studio** abre o app visual no navegador.
-   - **Terminal do Editor** abre um terminal pronto para rodar os scripts
-     (`python scripts/...`), para quem quiser usar sem a interface.
+4. Pronto: aparece o atalho **Ricardo AI Studio** na Área de Trabalho e no Menu Iniciar.
+   Ele abre o app na própria janela.
 
 **Para atualizar**, não precisa baixar o ZIP de novo: no app, abra **Configurações → Buscar
 atualização**. Ele baixa só o que mudou, instala só o que precisa e reabre sozinho

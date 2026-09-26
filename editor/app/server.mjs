@@ -140,6 +140,10 @@ const configuracoesDoProjeto = (id) => {
   for (const [campo, suf] of Object.entries(GERADOS)) {
     if (cfg[campo] === undefined && fs.existsSync(noPublic(irmao(id, suf)))) cfg[campo] = irmao(id, suf);
   }
+  // A marca vale para todos os vídeos: se existe marca.json e ela não foi desligada
+  // ("ativa": false), entra em todo vídeo automaticamente.
+  const marca = lerJson(path.join(PUBLIC, "marca.json"), null);
+  cfg.brand = marca && marca.ativa !== false ? "marca.json" : "";
   return cfg;
 };
 
@@ -186,6 +190,8 @@ const registrar = (t, texto) => {
 const DIAGNOSTICOS = [
   [/MemoryError|memory allocation of \d+ bytes failed|Unable to allocate|out of memory|CUDA out of memory/i,
     "Faltou memória RAM no computador. Feche outros programas (e abas do navegador) e tente de novo. Nas legendas, use \"Precisão normal\"."],
+  [/Could not extract frame|compositor|Request closed|Target closed|ENOMEM|JavaScript heap out of memory/i,
+    "O motor de vídeo ficou sem memória ao exportar. Feche outros programas (e abas do navegador) e exporte de novo."],
   [/credit balance is too low|sem créditos/i,
     "Sua conta da API do Claude está sem créditos (a assinatura Pro/Max não inclui a API). Adicione créditos em platform.claude.com > Billing ou troque a Inteligência para \"Sem IA\"."],
   [/não está logado no Claude|recusou o login/i, "Entre na sua conta do Claude em Configurações (canto de cima) e tente de novo."],
@@ -206,7 +212,8 @@ const diagnosticar = (linhas) => {
   return DIAGNOSTICOS.find(([re]) => re.test(texto))?.[1] ?? null;
 };
 
-const rodar = (t, exe, args, { env = {}, aoTerminar, cwd = EDITOR } = {}) => {
+// aoFalhar: chamado se o programa falhar; se devolver true, a tarefa continua (ex.: nova tentativa).
+const rodar = (t, exe, args, { env = {}, aoTerminar, aoFalhar, cwd = EDITOR } = {}) => {
   registrar(t, `▶ ${path.basename(exe)} ${args.map((a) => path.basename(String(a))).join(" ")}`);
   const proc = spawn(exe, args, {
     cwd,
@@ -242,6 +249,7 @@ const rodar = (t, exe, args, { env = {}, aoTerminar, cwd = EDITOR } = {}) => {
         t.status = "erro";
       }
     } else {
+      if (aoFalhar && aoFalhar()) return;
       t.status = "erro";
       t.dica = diagnosticar(t.linhas);
     }
@@ -354,6 +362,16 @@ app.put("/api/projeto", (req, res) => {
   const id = String(req.query.id || "");
   if (!fs.existsSync(noPublic(id))) return res.status(404).json({ erro: "vídeo não encontrado" });
   salvarConfiguracoes(id, req.body || {});
+  res.json({ ok: true });
+});
+
+// Lista do B-roll automático: o app mostra as cenas e deixa remover as que não combinaram.
+app.put("/api/broll", (req, res) => {
+  const arquivo = String(req.query.arquivo || "");
+  if (!arquivo.endsWith(".broll.json") || !Array.isArray(req.body)) return res.status(400).json({ erro: "pedido inválido" });
+  const abs = noPublic(arquivo);
+  if (!fs.existsSync(abs)) return res.status(404).json({ erro: "B-roll não encontrado" });
+  salvarJson(abs, req.body);
   res.json({ ok: true });
 });
 
@@ -474,14 +492,41 @@ app.post("/api/exportar", (req, res) => {
   const propsArq = path.join(OUT, `.${nome}.props.json`);
   salvarJson(propsArq, { ...props, video: projeto });
   const t = novaTarefa("exportar", projeto, "Exportar vídeo");
-  const args = [REMOTION_CLI, "render", "ShortVideo", path.join(OUT, nome), `--props=${propsArq}`];
-  if (process.env.REMOTION_BROWSER) args.push(`--browser-executable=${process.env.REMOTION_BROWSER}`);
-  rodar(t, process.execPath, args, {
-    aoTerminar: () => {
-      fs.rmSync(propsArq, { force: true });
-      return { arquivo: `/out/${encodeURIComponent(nome)}`, nome };
-    },
-  });
+  const logArq = path.join(OUT, nome.replace(/\.mp4$/, ".log"));
+
+  // Por padrão o Remotion renderiza metade dos núcleos ao mesmo tempo (8 num Ryzen 7), o que
+  // estoura a memória de PCs com pouca RAM livre e derruba o extrator de quadros ("compositor").
+  // Começa leve; se ainda assim cair por falta de memória, tenta de novo no modo mais leve.
+  const leve = [
+    ["--concurrency=3", "--offthreadvideo-cache-size-in-bytes=536870912", "--offthreadvideo-video-threads=2"],
+    ["--concurrency=1", "--offthreadvideo-cache-size-in-bytes=268435456", "--offthreadvideo-video-threads=1"],
+  ];
+  let tentativa = 0;
+  const renderizar = () => {
+    const args = [REMOTION_CLI, "render", "ShortVideo", path.join(OUT, nome), `--props=${propsArq}`, ...leve[tentativa]];
+    if (process.env.REMOTION_BROWSER) args.push(`--browser-executable=${process.env.REMOTION_BROWSER}`);
+    rodar(t, process.execPath, args, {
+      aoTerminar: () => {
+        fs.rmSync(propsArq, { force: true });
+        return { arquivo: `/out/${encodeURIComponent(nome)}`, nome };
+      },
+      aoFalhar: () => {
+        fs.writeFileSync(logArq, t.linhas.join("\n"), "utf-8"); // log completo para enviar ao suporte
+        const memoria = /Could not extract frame|compositor|Request closed|Target closed|ENOMEM|heap out of memory/i.test(
+          t.linhas.slice(-200).join("\n"),
+        );
+        if (memoria && tentativa < leve.length - 1) {
+          tentativa++;
+          t.progresso = 0;
+          registrar(t, "Faltou memória; tentando de novo no modo mais leve (mais lento, porém mais seguro)...");
+          renderizar();
+          return true;
+        }
+        return false;
+      },
+    });
+  };
+  renderizar();
   res.json({ id: t.id });
 });
 
@@ -515,6 +560,14 @@ app.post("/api/tarefas/:id/cancelar", (req, res) => {
     if (WIN) spawnSync("taskkill", ["/pid", String(t.proc.pid), "/T", "/F"]);
     else t.proc.kill("SIGTERM");
   }
+  res.json({ ok: true });
+});
+
+// A janela do Studio avisa a cada 15 s que continua aberta (ver vigiarJanela).
+let ultimaPresenca = Date.now();
+const SEM_JANELA_MS = 75_000;
+app.post("/api/presenca", (_req, res) => {
+  ultimaPresenca = Date.now();
   res.json({ ok: true });
 });
 
@@ -644,10 +697,43 @@ app.use((err, _req, res, _next) => {
 
 // ------------------------------------------------------------------ inicialização
 
+// Abre o Studio numa janela própria de aplicativo (Edge/Chrome em modo "app": sem abas
+// nem barra de endereço). Sem Edge/Chrome, usa o navegador padrão.
+const navegadorApp = () => {
+  if (!WIN) return null;
+  const pastas = [process.env["ProgramFiles(x86)"], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
+  const candidatos = pastas.flatMap((p) => [
+    path.join(p, "Microsoft", "Edge", "Application", "msedge.exe"),
+    path.join(p, "Google", "Chrome", "Application", "chrome.exe"),
+  ]);
+  return candidatos.find((c) => fs.existsSync(c)) ?? null;
+};
+
 const abrirNavegador = (url) => {
   if (process.env.NO_OPEN) return;
+  const app = navegadorApp();
+  if (app) {
+    spawn(app, [`--app=${url}`, "--window-size=1440,900", "--new-window"], { detached: true, stdio: "ignore" })
+      .on("error", () => {})
+      .unref();
+    return;
+  }
   const [cmd, args] = WIN ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
   spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: true }).on("error", () => {}).unref();
+};
+
+// O motor roda escondido: quando a janela do Studio fica fechada por um tempo (e nada está
+// rodando, como uma exportação), ele se desliga sozinho. A janela avisa que está aberta
+// a cada 15 s (/api/presenca).
+const vigiarJanela = () => {
+  if (process.env.STUDIO_SEM_AUTOSAIR) return;
+  setInterval(() => {
+    const ocupado = [...tarefas.values()].some((t) => t.status === "rodando");
+    if (!ocupado && Date.now() - ultimaPresenca > SEM_JANELA_MS) {
+      console.log("Janela do Studio fechada: desligando o motor.");
+      process.exit(0);
+    }
+  }, 15_000).unref();
 };
 
 const iniciar = async () => {
@@ -661,6 +747,7 @@ const iniciar = async () => {
     console.log(`\n  Ricardo AI Studio rodando em ${url}`);
     console.log("  Deixe esta janela aberta enquanto estiver usando. Para fechar, feche a janela.\n");
     abrirNavegador(url);
+    vigiarJanela();
   });
   servidor.on("error", (err) => {
     if (err.code === "EADDRINUSE") {

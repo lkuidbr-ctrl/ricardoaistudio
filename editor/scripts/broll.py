@@ -99,7 +99,8 @@ def escolher_arquivo(video: dict, largura_alvo: int = 1080) -> dict | None:
     return min(arquivos, key=lambda f: abs(f["width"] - largura_alvo) + (0 if f["height"] >= f["width"] else 2000))
 
 
-def buscar_pexels(busca: str, chave: str, minimo_s: float) -> tuple[dict, dict] | None:
+def buscar_pexels(busca: str, chave: str, minimo_s: float, quantos: int = 4) -> list[tuple[dict, dict]]:
+    """Até `quantos` vídeos verticais do Pexels que durem o suficiente, na ordem do Pexels."""
     url = "https://api.pexels.com/videos/search?" + urllib.parse.urlencode(
         {"query": busca, "orientation": "portrait", "size": "medium", "per_page": 8}
     )
@@ -111,12 +112,62 @@ def buscar_pexels(busca: str, chave: str, minimo_s: float) -> tuple[dict, dict] 
         if e.code in (401, 403):
             raise SystemExit("Chave do Pexels inválida. Pegue uma grátis em https://www.pexels.com/api/")
         raise SystemExit(f"Erro do Pexels ({e.code}) buscando '{busca}'")
+    candidatos = []
     for video in dados.get("videos", []):
         if video.get("duration", 0) >= minimo_s:
             arquivo = escolher_arquivo(video)
             if arquivo:
-                return video, arquivo
-    return None
+                candidatos.append((video, arquivo))
+        if len(candidatos) == quantos:
+            break
+    return candidatos
+
+
+ESCOLHA_INSTRUCOES = """Você escolhe B-roll (imagens de apoio) para vídeos curtos.
+Vou mostrar a frase falada naquele momento do vídeo e miniaturas de vídeos de banco de imagens.
+Escolha a miniatura que ILUSTRA MELHOR o sentido da frase para quem está assistindo.
+Se nenhuma tiver relação clara com a frase, responda -1: é melhor não ter B-roll do que ter
+uma imagem sem nada a ver."""
+
+ESCOLHA_SCHEMA = {
+    "type": "object",
+    "properties": {"escolha": {"type": "integer"}, "motivo": {"type": "string"}},
+    "required": ["escolha", "motivo"],
+    "additionalProperties": False,
+}
+
+
+def miniatura(video: dict) -> str | None:
+    url = video.get("image")
+    if not url:
+        return None
+    # Miniatura pequena: a IA enxerga bem e custa poucos tokens.
+    return url + ("&" if "?" in url else "?") + "auto=compress&w=360"
+
+
+def escolher_com_visao(args, frase: str, busca: str, candidatos: list[tuple[dict, dict]]) -> int:
+    """Índice do candidato que combina com a frase, ou -1 se nenhum combina.
+    Só o Claude enxerga imagens; nas outras IAs fica o primeiro resultado do Pexels."""
+    if args.ia != "claude":
+        return 0
+    conteudo: list[dict] = [{"type": "text", "text": f'Frase falada: "{frase}"\nBusca usada no banco de imagens: "{busca}"'}]
+    validos = 0
+    for i, (video, _arquivo) in enumerate(candidatos):
+        url = miniatura(video)
+        if url:
+            conteudo += [{"type": "text", "text": f"Imagem {i}:"}, {"type": "image", "source": {"type": "url", "url": url}}]
+            validos += 1
+    if not validos:
+        return 0
+    resposta = pedir_json(args, ESCOLHA_INSTRUCOES, conteudo, ESCOLHA_SCHEMA)
+    escolha = resposta.get("escolha", 0)
+    print(f"         IA escolheu {'nenhuma' if escolha < 0 else f'a imagem {escolha}'}: {resposta.get('motivo', '')}")
+    return escolha if -1 <= escolha < len(candidatos) else 0
+
+
+def frase_em_volta(captions: list[dict], indice: int, janela_ms: int = 3000) -> str:
+    centro = captions[indice]["startMs"]
+    return "".join(c["text"] for c in captions if abs(c["startMs"] - centro) <= janela_ms).strip()
 
 
 def baixar(url: str, destino: Path) -> None:
@@ -166,17 +217,28 @@ def main() -> None:
     pasta.mkdir(exist_ok=True)
     transicoes = ["zoom", "slide", "glitch", "fade"]
     itens, creditos = [], []
+    visao_avisada = False
     for n, cena in enumerate(cenas):
         palavra = captions[cena["indice"]]
         duracao_ms = round(min(3.0, max(1.5, cena["duracao"])) * 1000)
         print(f"{palavra['startMs'] / 1000:6.1f}s  {palavra['text'].strip():<14} -> '{cena['busca']}' ({cena['modo']})")
         if args.so_planejar:
             continue
-        achado = buscar_pexels(cena["busca"], chave, duracao_ms / 1000)
-        if not achado:
+        candidatos = buscar_pexels(cena["busca"], chave, duracao_ms / 1000)
+        if not candidatos:
             print("         (nada encontrado no Pexels, pulando)")
             continue
-        video, arquivo = achado
+        try:
+            escolha = escolher_com_visao(args, frase_em_volta(captions, cena["indice"]), cena["busca"], candidatos)
+        except IaIndisponivel as e:
+            if not visao_avisada:
+                avisar_sem_ia(e)
+                visao_avisada = True
+            escolha = 0
+        if escolha < 0:
+            print("         (nenhuma imagem combinou com a frase; esta cena fica sem B-roll)")
+            continue
+        video, arquivo = candidatos[escolha]
         nome = f"{args.video.stem}-{n + 1}-{video['id']}.mp4"
         if not (pasta / nome).exists():
             baixar(arquivo["link"], pasta / nome)
@@ -187,6 +249,9 @@ def main() -> None:
                 "durationMs": duracao_ms,
                 "mode": cena["modo"],
                 "transition": transicoes[n % len(transicoes)],
+                # Para mostrar no app (e decidir se remove): o que foi buscado e a frase.
+                "busca": cena["busca"],
+                "frase": frase_em_volta(captions, cena["indice"])[:120],
             }
         )
         creditos.append(f"{video.get('user', {}).get('name', '?')} - {video.get('url', '')}")

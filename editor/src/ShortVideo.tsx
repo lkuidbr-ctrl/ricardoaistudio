@@ -13,6 +13,7 @@ import { Music, SoundEffects, type SfxEvent } from "./effects/Sound";
 import type { ShortVideoProps } from "./schema";
 import {
   buildTimeline,
+  joinsPorFrase,
   remapBroll,
   remapCaptions,
   type AutoBroll,
@@ -52,6 +53,11 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     () => (rawCaptions ? remapCaptions(rawCaptions, timeline) : null),
     [rawCaptions, timeline],
   );
+  // Emendas para as transições: as do corte de silêncios ou, sem corte, o começo das frases.
+  const joins = useMemo(
+    () => (timeline.joins.length ? timeline.joins : joinsPorFrase(captions ?? [], fps)),
+    [timeline, captions, fps],
+  );
 
   const broll = useMemo(
     () => [...props.broll, ...(autoBroll ? remapBroll(autoBroll, timeline) : [])],
@@ -63,7 +69,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     const events: SfxEvent[] = [];
     const joinSound = { none: null, zoom: null, flash: "whoosh", whip: "whoosh", glitch: "glitch" } as const;
     const js = joinSound[props.cutTransition];
-    if (js) for (const j of timeline.joins) events.push({ frame: j, name: js });
+    if (js) for (const j of joins) events.push({ frame: j, name: js });
     if (props.emojis) for (const c of captions ?? []) if (c.emoji) events.push({ frame: at(c.startMs), name: "pop" });
     for (const b of broll) events.push({ frame: at(b.startMs), name: b.transition === "glitch" ? "glitch" : "whoosh" });
     for (const t of props.behindTexts) events.push({ frame: at(t.startMs), name: "swoosh" });
@@ -73,14 +79,14 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
       events.push({ frame: durationInFrames - ctaFrames + 38, name: "pop" }); // "clique" no seguir
     }
     return events;
-  }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.hookText, timeline, captions, broll]);
+  }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.hookText, joins, captions, broll]);
 
   if (cuts === undefined || brand === undefined) return null;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
       <AutoZoom zooms={props.zooms}>
-        <CutTransition kind={props.cutTransition} joins={timeline.joins}>
+        <CutTransition kind={props.cutTransition} joins={joins}>
           {props.video ? <CutVideo src={props.video} timeline={timeline} /> : null}
 
           {props.behindTexts.map((t, i) => (
