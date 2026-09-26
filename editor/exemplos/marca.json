@@ -1,0 +1,16 @@
+{
+  "arroba": "@ricardo",
+  "corPrincipal": "#00E5A0",
+  "corTexto": "#FFFFFF",
+  "corFundo": "#0B1020",
+  "fonte": "",
+  "logo": "logo.png",
+  "marcaDagua": "logo",
+  "posicao": "topo-direita",
+  "barraProgresso": true,
+  "cta": {
+    "texto": "Segue pra mais dicas como essa",
+    "botao": "Seguir",
+    "duracaoMs": 2500
+  }
+}
