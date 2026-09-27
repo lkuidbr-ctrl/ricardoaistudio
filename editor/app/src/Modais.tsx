@@ -143,6 +143,41 @@ export const ModalConfig: React.FC<{
   return (
     <Modal titulo="Configurações" fechar={fechar} largo>
       <section className="secao">
+        <header>
+          <h3>Atualizações</h3>
+          <button
+            className="botao primario pequeno"
+            disabled={tarefaAtualizar?.status === "rodando" || versao?.git === false}
+            onClick={async () => {
+              setErroAtualizar("");
+              try {
+                const { id } = await enviar<{ id: string }>("POST", "/api/atualizar");
+                aoAtualizar(id);
+              } catch (e) {
+                setErroAtualizar((e as Error).message);
+              }
+            }}
+          >
+            {tarefaAtualizar?.status === "rodando" ? "Buscando..." : "Buscar atualização"}
+          </button>
+        </header>
+        <p className="dica">
+          Baixa só o que mudou e reinicia o Studio sozinho. Na primeira vez, o GitHub pode pedir para você entrar na sua conta
+          (o projeto é privado).
+          {versao?.versao ? <> Versão atual: <b>{versao.versao}</b>.</> : null}
+        </p>
+        {versao?.git === false ? <p className="alerta">Falta o Git. Rode o instalar-windows.bat uma vez para ativar as atualizações.</p> : null}
+        {erroAtualizar ? <p className="erro">{erroAtualizar}</p> : null}
+        {tarefaAtualizar?.status === "ok" && !tarefaAtualizar.resultado?.atualizado ? <p className="ok-texto">Você já tem a versão mais nova.</p> : null}
+        {tarefaAtualizar?.status === "erro" ? (
+          <>
+            {tarefaAtualizar.dica ? <p className="alerta">{tarefaAtualizar.dica}</p> : null}
+            <pre className="log">{tarefaAtualizar.linhas.slice(-8).join("\n")}</pre>
+          </>
+        ) : null}
+      </section>
+
+      <section className="secao">
         <header><h3>Inteligência artificial</h3></header>
         <p className="dica">Usada em legendas com emojis, B-roll automático, clipes e dublagem.</p>
         <select value={ia} onChange={(e) => setIa(e.target.value as Ia)}>
@@ -250,40 +285,6 @@ export const ModalConfig: React.FC<{
         ) : null}
       </section>
 
-      <section className="secao">
-        <header>
-          <h3>Atualizações</h3>
-          <button
-            className="botao primario pequeno"
-            disabled={tarefaAtualizar?.status === "rodando" || versao?.git === false}
-            onClick={async () => {
-              setErroAtualizar("");
-              try {
-                const { id } = await enviar<{ id: string }>("POST", "/api/atualizar");
-                aoAtualizar(id);
-              } catch (e) {
-                setErroAtualizar((e as Error).message);
-              }
-            }}
-          >
-            {tarefaAtualizar?.status === "rodando" ? "Buscando..." : "Buscar atualização"}
-          </button>
-        </header>
-        <p className="dica">
-          Baixa só o que mudou e reinicia o Studio sozinho. Na primeira vez, o GitHub pode pedir para você entrar na sua conta
-          (o projeto é privado).
-          {versao?.versao ? <> Versão atual: <b>{versao.versao}</b>.</> : null}
-        </p>
-        {versao?.git === false ? <p className="alerta">Falta o Git. Rode o instalar-windows.bat uma vez para ativar as atualizações.</p> : null}
-        {erroAtualizar ? <p className="erro">{erroAtualizar}</p> : null}
-        {tarefaAtualizar?.status === "ok" && !tarefaAtualizar.resultado?.atualizado ? <p className="ok-texto">Você já tem a versão mais nova.</p> : null}
-        {tarefaAtualizar?.status === "erro" ? (
-          <>
-            {tarefaAtualizar.dica ? <p className="alerta">{tarefaAtualizar.dica}</p> : null}
-            <pre className="log">{tarefaAtualizar.linhas.slice(-8).join("\n")}</pre>
-          </>
-        ) : null}
-      </section>
 
       <section className="secao">
         <header><h3>Pexels (B-roll automático)</h3>{temPexels ? <span className="selo ok">✓ configurado</span> : null}</header>
