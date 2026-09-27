@@ -27,3 +27,36 @@ que o Studio já tem.
    vertical" quando a câmera muda.
 4. **Modelo de venda:** grátis no GitHub e pago nas lojas (Microsoft Store e Mac App Store). Muita
    gente paga pela comodidade.
+
+## Shotcut, OpenShot e Olive
+
+Analisados em 27/09/2026. Os três são editores **tradicionais, de linha do tempo**: você monta
+tudo à mão, trilha por trilha. É o contrário do Studio, em que a IA edita e você só ajusta.
+Nenhum tem IA, legenda automática ou foco em vídeo curto.
+
+| | Shotcut | OpenShot | Olive |
+|---|---|---|---|
+| Situação | Maduro, muito usado | Maduro, bom para iniciantes | Ainda "alpha" (instável) depois de anos |
+| Feito com | C++, Qt, motor MLT, FFmpeg | Python, Qt, libopenshot, FFmpeg | C++, Qt, OpenGL |
+| Estrelas | 15 mil | 6,6 mil | 9 mil |
+| Licença | GPL-3.0 | GPL-3.0 | GPL-3.0 |
+
+**Licença GPL-3.0:** vale o mesmo que no LosslessCut. O código não pode entrar num Studio vendido;
+as ideias, sim.
+
+**O que aproveitar (por prioridade):**
+1. **Arquivos de prévia leves (proxy, do Shotcut):** o preview usa uma cópia pequena do vídeo e a
+   exportação usa o original. Deixaria o preview liso num PC modesto e com vídeos 4K de celular.
+2. **Faixa do tempo simples embaixo do vídeo:** uma tira mostrando onde estão os zooms, o B-roll,
+   os textos e os cortes, com arrastar para mudar de lugar. Não é uma linha do tempo completa: é só
+   para ver e ajustar o que a IA fez.
+3. **Volume da voz por igual (normalização, do Shotcut):** o filtro `loudnorm` do FFmpeg deixa a
+   voz no volume certo para Reels e TikTok, sem trechos baixos.
+4. **Modelos de título e de animação (OpenShot):** pacotes prontos de títulos, animações e
+   transições. Também é algo para vender depois (pacotes extras).
+5. **Fundo verde (chroma key, OpenShot):** simples de fazer. Para quem não tem fundo verde, o
+   Studio já recorta a pessoa com IA.
+
+**Lição do Olive:** tentar fazer um editor completo de linha do tempo leva anos e pode nunca ficar
+estável. O ponto forte do Studio é a edição automática para vídeo curto; melhor não virar um
+Premiere.
