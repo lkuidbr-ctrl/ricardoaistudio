@@ -92,11 +92,10 @@ def por_claude(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
     except (TypeError, anthropic.CredentialsError) as e:
         if isinstance(e, TypeError) and "authentication" not in str(e):
             raise
-        raise IaIndisponivel("Você não está logado no Claude (Configurações > Entrar no Claude).")
+        raise IaIndisponivel("Falta a chave do Claude: cole a sua chave da API em Configurações.")
     except anthropic.AuthenticationError:
         raise IaIndisponivel(
-            "O Claude recusou o login: entre de novo em Configurações > Entrar no Claude. "
-            "Se você tiver ANTHROPIC_API_KEY definida, ela passa na frente do login: apague-a."
+            "O Claude recusou a chave: confira a chave da API em Configurações (cole de novo e clique em Salvar e testar)."
         )
     except anthropic.RateLimitError:
         raise IaIndisponivel("O Claude atingiu o limite de uso por agora; espere um pouco e tente de novo.")

@@ -6,7 +6,7 @@ import { ShortVideo } from "../../src/ShortVideo";
 import { Ajustes } from "./Ajustes";
 import { enviar, get, subir, type Arquivos, type Projeto, type Tarefa } from "./api";
 import { Ferramentas, type Ia } from "./Ferramentas";
-import { ModalClipes, ModalConfig, ModalExportar, ModalNarrar } from "./Modais";
+import { ModalChave, ModalClipes, ModalConfig, ModalExportar, ModalNarrar } from "./Modais";
 
 const FPS = 30;
 const SEM_ARQUIVOS: Arquivos = { captions: false, cuts: false, person: false, brollFile: false, emojis: false };
@@ -53,8 +53,12 @@ export const App: React.FC = () => {
   const [duracao, setDuracao] = useState<number | null>(null);
   const [erroPreview, setErroPreview] = useState("");
   const [tarefas, setTarefas] = useState<Record<string, Tarefa>>({});
-  const [ia, setIaEstado] = useState<Ia>(() => lerLocal("ia", "claude") as Ia);
-  const [modal, setModal] = useState<null | "narrar" | "config" | "exportar">(null);
+  const [ia, setIaEstado] = useState<Ia>(() => lerLocal("ia-escolhida", "claude") as Ia);
+  const [modal, setModal] = useState<null | "narrar" | "config" | "exportar" | "chave">(null);
+  // Tem chave do Claude salva? (null = ainda não sei)
+  const [temChave, setTemChave] = useState<boolean | null>(null);
+  // Vídeo esperando a chave para a IA editar.
+  const esperandoChave = useRef<string | null>(null);
   const [exportacao, setExportacao] = useState<string | null>(null);
   const [clipes, setClipes] = useState<NonNullable<Tarefa["resultado"]>["clipes"] | null>(null);
   const [envio, setEnvio] = useState<number | null>(null);
@@ -75,7 +79,7 @@ export const App: React.FC = () => {
 
   const setIa = (v: Ia) => {
     setIaEstado(v);
-    gravarLocal("ia", v);
+    gravarLocal("ia-escolhida", v);
   };
 
   // ---------------------------------------------------------------- projetos
@@ -106,6 +110,12 @@ export const App: React.FC = () => {
       })
       .catch((e) => avisar(`Não consegui falar com o Studio: ${e.message}`, "erro"));
   }, [carregarProjetos, abrirProjeto, avisar]);
+
+  useEffect(() => {
+    get<{ temClaude: boolean }>("/api/config")
+      .then((c) => setTemChave(c.temClaude))
+      .catch(() => {});
+  }, []);
 
   // Avisa o motor que a janela está aberta; fechada por ~1 min, ele se desliga sozinho.
   useEffect(() => {
@@ -149,6 +159,7 @@ export const App: React.FC = () => {
   const mudar = useCallback((parcial: Partial<ShortVideoProps>) => setProps((p) => (p ? { ...p, ...parcial } : p)), []);
 
   // ---------------------------------------------------------------- tarefas
+  const editarAutomaticoRef = useRef<(projeto: string) => void>(() => {});
   // aoTerminar é criado antes de "iniciar"; a referência deixa ele começar uma ferramenta.
   const iniciarRef = useRef<(ferramenta: string, opcoes?: Record<string, unknown>, projeto?: string | null) => void>(() => {});
   const aoTerminar = useCallback(
@@ -174,7 +185,7 @@ export const App: React.FC = () => {
         await carregarProjetos();
         await abrirProjeto(t.resultado.novoProjeto);
         // Vídeo novo que acabou de chegar: a IA já edita sozinha.
-        if (t.tipo === "converter") iniciarRef.current("automatico", {}, t.resultado.novoProjeto);
+        if (t.tipo === "converter") editarAutomaticoRef.current(t.resultado.novoProjeto);
         return;
       }
       if (t.resultado?.recarregar) {
@@ -270,6 +281,18 @@ export const App: React.FC = () => {
   };
   iniciarRef.current = iniciar;
 
+  // Edição automática de um vídeo novo. Sem chave do Claude, pede a chave antes
+  // (ou deixa seguir no modo simples, sem IA).
+  const editarAutomatico = (projeto: string) => {
+    if (!temChave) {
+      esperandoChave.current = projeto;
+      setModal("chave");
+      return;
+    }
+    iniciar("automatico", {}, projeto);
+  };
+  editarAutomaticoRef.current = editarAutomatico;
+
   const cancelar = (id: string) => enviar("POST", `/api/tarefas/${id}/cancelar`).catch(() => {});
 
   const exportar = async () => {
@@ -297,7 +320,7 @@ export const App: React.FC = () => {
       await carregarProjetos();
       await abrirProjeto(caminho);
       avisar("Vídeo adicionado! A IA está editando: legenda, cortes, destaques, zooms e título. Depois é só ajustar o que quiser.");
-      iniciar("automatico", {}, caminho);
+      editarAutomatico(caminho);
     } catch (e) {
       avisar((e as Error).message, "erro");
     } finally {
@@ -419,6 +442,11 @@ export const App: React.FC = () => {
       ) : (
         <main className="area">
           <aside className="coluna esquerda">
+            {temChave === false ? (
+              <button className="faixa-chave" onClick={() => setModal("chave")}>
+                ⚠ A IA precisa da sua chave do Claude. <b>Clique para colar.</b>
+              </button>
+            ) : null}
             {props ? (
               <Ferramentas
                 arquivos={arquivos}
@@ -523,7 +551,32 @@ export const App: React.FC = () => {
           aoLogin={(id) => acompanhar(id, "Entrar no Claude", "login", null)}
           tarefaLogin={Object.values(tarefas).filter((t) => t.tipo === "login").pop()}
           aoAtualizar={(id) => acompanhar(id, "Atualizar o Studio", "atualizar", null)}
+          aoMudarChave={setTemChave}
           tarefaAtualizar={Object.values(tarefas).filter((t) => t.tipo === "atualizar").pop()}
+        />
+      ) : null}
+      {modal === "chave" ? (
+        <ModalChave
+          fechar={() => {
+            esperandoChave.current = null;
+            setModal(null);
+          }}
+          aoSalvar={() => {
+            setTemChave(true);
+            setIa("claude");
+            setModal(null);
+            avisar("Chave salva! A IA do Claude está ligada.");
+            const projeto = esperandoChave.current;
+            esperandoChave.current = null;
+            if (projeto) iniciar("automatico", { ia: "claude" }, projeto);
+          }}
+          semIa={() => {
+            setIa("dicionario");
+            setModal(null);
+            const projeto = esperandoChave.current;
+            esperandoChave.current = null;
+            if (projeto) iniciar("automatico", { ia: "dicionario" }, projeto);
+          }}
         />
       ) : null}
       {modal === "exportar" && exportacao && tarefas[exportacao] ? (
