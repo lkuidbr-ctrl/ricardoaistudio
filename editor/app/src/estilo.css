@@ -227,3 +227,5 @@ input[type="range"] { width: 100%; accent-color: var(--destaque); }
 .frase textarea { width: 100%; resize: vertical; font: inherit; font-size: 13.5px; color: inherit; background: #0f1015; border: 1px solid var(--borda); border-radius: 8px; padding: 6px 8px; }
 .frase textarea:focus { outline: none; border-color: var(--destaque); }
 .frase.duvida textarea { border-color: #d4a72c; }
+.faixa-chave { display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #d4a72c; background: rgba(212, 167, 44, .12); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.faixa-chave:hover { background: rgba(212, 167, 44, .2); }

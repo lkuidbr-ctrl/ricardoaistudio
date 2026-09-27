@@ -100,6 +100,50 @@ export const ModalNarrar: React.FC<{ fechar: () => void; aoIniciar: (id: string)
   );
 };
 
+// Pede a chave do Claude antes da IA editar (aparece quando ainda não há chave salva).
+export const ModalChave: React.FC<{ fechar: () => void; aoSalvar: () => void; semIa: () => void }> = ({ fechar, aoSalvar, semIa }) => {
+  const [chave, setChave] = useState("");
+  const [estado, setEstado] = useState<"" | "testando" | string>("");
+  const salvar = async () => {
+    setEstado("testando");
+    try {
+      await enviar("PUT", "/api/config", { claudeKey: chave });
+      const r = await enviar<{ ok: boolean; motivo?: string }>("POST", "/api/claude/testar");
+      if (r.ok) return aoSalvar();
+      setEstado(r.motivo || "A chave não funcionou.");
+    } catch (e) {
+      setEstado((e as Error).message);
+    }
+  };
+  return (
+    <Modal titulo="Cole sua chave do Claude" fechar={fechar}>
+      <p className="dica">
+        Para a IA editar seus vídeos sozinha (legenda, destaques, zooms, título e B-roll), o Studio precisa da sua chave da API do
+        Claude. Você cola uma vez só: ela fica guardada no seu computador.
+      </p>
+      <p className="dica">
+        Crie em{" "}
+        <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noreferrer">
+          platform.claude.com → API Keys
+        </a>{" "}
+        (começa com <b>sk-ant-api</b>). Ela usa os créditos da API, não a assinatura.
+      </p>
+      <div className="linha-form">
+        <input type="password" placeholder="sk-ant-api03-..." value={chave} autoFocus onChange={(e) => { setChave(e.target.value); setEstado(""); }} />
+        <button className="botao primario" disabled={!chave.trim() || estado === "testando"} onClick={salvar}>
+          {estado === "testando" ? "Testando..." : "Salvar e continuar"}
+        </button>
+      </div>
+      {estado && estado !== "testando" ? <p className="alerta">{estado}</p> : null}
+      <footer>
+        <button className="link" onClick={semIa}>
+          Agora não: editar no modo simples, sem IA
+        </button>
+      </footer>
+    </Modal>
+  );
+};
+
 export const ModalConfig: React.FC<{
   fechar: () => void;
   ia: Ia;
@@ -108,7 +152,8 @@ export const ModalConfig: React.FC<{
   tarefaLogin?: Tarefa;
   aoAtualizar: (id: string) => void;
   tarefaAtualizar?: Tarefa;
-}> = ({ fechar, ia, setIa, aoLogin, tarefaLogin, aoAtualizar, tarefaAtualizar }) => {
+  aoMudarChave: (tem: boolean) => void;
+}> = ({ fechar, ia, setIa, aoLogin, tarefaLogin, aoAtualizar, tarefaAtualizar, aoMudarChave }) => {
   const [versao, setVersao] = useState<{ versao: string | null; git: boolean } | null>(null);
   const [erroAtualizar, setErroAtualizar] = useState("");
   useEffect(() => {
@@ -217,6 +262,9 @@ export const ModalConfig: React.FC<{
               setChaveClaude("");
               atualizar();
               testar();
+              // Colou a chave: a IA passa a ser o Claude.
+              setIa("claude");
+              aoMudarChave(true);
             }}
           >
             Salvar e testar
@@ -233,6 +281,7 @@ export const ModalConfig: React.FC<{
                 await enviar("PUT", "/api/config", { claudeKey: "" });
                 setTeste(null);
                 atualizar();
+                aoMudarChave(false);
               }}
             >
               Remover chave

@@ -5,6 +5,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -194,7 +195,7 @@ const DIAGNOSTICOS = [
     "O motor de vídeo ficou sem memória ao exportar. Feche outros programas (e abas do navegador) e exporte de novo."],
   [/credit balance is too low|sem créditos/i,
     "Sua conta da API do Claude está sem créditos (a assinatura Pro/Max não inclui a API). Adicione créditos em platform.claude.com > Billing ou troque a Inteligência para \"Sem IA\"."],
-  [/não está logado no Claude|recusou o login/i, "Entre na sua conta do Claude em Configurações (canto de cima) e tente de novo."],
+  [/Falta a chave do Claude|não está logado no Claude|recusou (o login|a chave)/i, "Cole a sua chave da API do Claude em Configurações (canto de cima) e clique em Salvar e testar."],
   [/PEXELS_API_KEY|Chave do Pexels inválida/i, "Cole a sua chave grátis do Pexels em Configurações e tente de novo."],
   [/Não consegui falar com o Ollama/i, "O Ollama não está aberto. Abra o Ollama ou troque a Inteligência para Claude."],
   [/WinError 126|DLL load failed|Error loading .*\.dll|vcruntime|msvcp140/i,
@@ -390,7 +391,7 @@ const rodarAutomatico = (t, projeto, opcoes) => {
   if (!tem(".captions.json")) passos.push("transcrever");
   if (!tem(".cuts.json")) passos.push("cortar");
   passos.push("emojis");
-  if (config().pexelsKey) passos.push("broll");
+  if (config().pexelsKey || process.env.PEXELS_API_KEY) passos.push("broll");
   const proximo = (i) => {
     if (t.status === "cancelado") return;
     if (i >= passos.length) {
@@ -674,9 +675,22 @@ const versaoAtual = () => {
   return r.status === 0 ? r.stdout.trim() : null;
 };
 
+// Identifica esta execução: muda quando os arquivos do Studio mudam (atualização ou ZIP novo).
+let ID_EXECUCAO = "";
+const calcularIdExecucao = () =>
+  [path.join(APP, "server.mjs"), path.join(DIST, "index.html")]
+    .map((f) => (fs.existsSync(f) ? Math.round(fs.statSync(f).mtimeMs) : 0))
+    .join("-");
+
 app.get("/api/versao", (_req, res) => {
   const temGit = !git("--version").error;
-  res.json({ versao: temGit ? versaoAtual() : null, git: temGit });
+  res.json({ versao: temGit ? versaoAtual() : null, git: temGit, execucao: ID_EXECUCAO, pasta: EDITOR });
+});
+
+// Uma versão mais nova do Studio pede para esta fechar e ocupa o lugar dela.
+app.post("/api/sair", (_req, res) => {
+  res.json({ ok: true });
+  setTimeout(() => process.exit(0), 300);
 });
 
 app.post("/api/atualizar", (_req, res) => {
@@ -727,7 +741,7 @@ app.put("/api/marca", (req, res) => {
 app.get("/api/config", (_req, res) => {
   const c = config();
   res.json({
-    temPexels: Boolean(c.pexelsKey),
+    temPexels: Boolean(c.pexelsKey || process.env.PEXELS_API_KEY),
     temClaude: Boolean(c.claudeKey),
     claudeFinal: c.claudeKey ? c.claudeKey.slice(-4) : "",
     claudeModelo: MODELOS_CLAUDE.has(c.claudeModelo) ? c.claudeModelo : "claude-opus-5",
@@ -832,26 +846,85 @@ const vigiarJanela = () => {
   }, 15_000).unref();
 };
 
+const portaLivre = () =>
+  new Promise((ok) => {
+    const teste = net.createServer();
+    teste.once("error", () => ok(false));
+    teste.listen(PORT, "127.0.0.1", () => teste.close(() => ok(true)));
+  });
+const esperarPortaLivre = async (ms) => {
+  for (const fim = Date.now() + ms; Date.now() < fim; await new Promise((r) => setTimeout(r, 300))) {
+    if (await portaLivre()) return true;
+  }
+  return false;
+};
+
+// Fecha à força o Studio antigo que ocupa a porta (versões antigas não sabem sair sozinhas).
+// Só fecha se for o Node (o motor do Studio), nunca outro programa.
+const fecharDonoDaPorta = () => {
+  if (WIN) {
+    const linhas = spawnSync("netstat", ["-ano", "-p", "TCP"], { encoding: "utf-8", windowsHide: true }).stdout || "";
+    const pids = new Set(
+      linhas.split(/\r?\n/).filter((l) => l.includes(`:${PORT} `) && /LISTEN/i.test(l)).map((l) => l.trim().split(/\s+/).pop()),
+    );
+    for (const pid of pids) {
+      const nome = spawnSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { encoding: "utf-8", windowsHide: true }).stdout || "";
+      if (/node\.exe/i.test(nome)) spawnSync("taskkill", ["/PID", pid, "/T", "/F"], { windowsHide: true });
+    }
+  } else {
+    const pids = (spawnSync("lsof", ["-ti", `tcp:${PORT}`, "-sTCP:LISTEN"], { encoding: "utf-8" }).stdout || "").split(/\s+/).filter(Boolean);
+    for (const pid of pids) {
+      const nome = (spawnSync("ps", ["-p", pid, "-o", "comm="], { encoding: "utf-8" }).stdout || "").trim();
+      if (/node/i.test(nome)) process.kill(Number(pid), "SIGKILL");
+    }
+  }
+};
+
+// A porta já está ocupada: se for este mesmo Studio, só abre a janela; se for uma versão
+// antiga (ou de outra pasta) que ficou aberta, fecha ela e abre esta.
+const substituirStudioAberto = async (url) => {
+  const outro = await fetch(`${url}/api/versao`, { signal: AbortSignal.timeout(3000) })
+    .then((r) => r.json())
+    .catch(() => null);
+  if (outro && outro.execucao === ID_EXECUCAO && outro.pasta === EDITOR) {
+    console.log(`O Studio já está aberto; abrindo ${url}`);
+    abrirNavegador(url);
+    return false;
+  }
+  console.log("Fechando uma versão antiga do Studio que tinha ficado aberta...");
+  await fetch(`${url}/api/sair`, { method: "POST", signal: AbortSignal.timeout(3000) }).catch(() => {});
+  if (!(await esperarPortaLivre(4000))) fecharDonoDaPorta();
+  if (!(await esperarPortaLivre(6000))) {
+    console.log(`Não consegui fechar o programa que está usando a porta ${PORT}. Reinicie o computador e abra o Studio de novo.`);
+    process.exit(1);
+  }
+  return true;
+};
+
 const iniciar = async () => {
   if (!fs.existsSync(path.join(DIST, "index.html")) || process.env.REBUILD) {
     console.log("Preparando a interface (só na primeira vez)...");
     const { build } = await import("vite");
     await build({ configFile: path.join(APP, "vite.config.mjs"), logLevel: "warn" });
   }
+  ID_EXECUCAO = calcularIdExecucao();
   const url = `http://localhost:${PORT}`;
-  const servidor = app.listen(PORT, "127.0.0.1", () => {
-    console.log(`\n  Ricardo AI Studio rodando em ${url}`);
-    console.log("  Deixe esta janela aberta enquanto estiver usando. Para fechar, feche a janela.\n");
-    abrirNavegador(url);
-    vigiarJanela();
-  });
-  servidor.on("error", (err) => {
-    if (err.code === "EADDRINUSE") {
-      console.log(`O Studio já está aberto; abrindo ${url}`);
+  const ligar = (novaTentativa) => {
+    // No Express 5, esta função também é chamada quando dá erro (ex.: porta ocupada).
+    const servidor = app.listen(PORT, "127.0.0.1", (erro) => {
+      if (erro) return;
+      console.log(`\n  Ricardo AI Studio rodando em ${url}`);
+      console.log("  Deixe esta janela aberta enquanto estiver usando. Para fechar, feche a janela.\n");
       abrirNavegador(url);
+      vigiarJanela();
+    });
+    servidor.on("error", async (err) => {
+      if (err.code !== "EADDRINUSE") throw err;
+      if (novaTentativa && (await substituirStudioAberto(`http://127.0.0.1:${PORT}`))) return ligar(false);
       setTimeout(() => process.exit(0), 500);
-    } else throw err;
-  });
+    });
+  };
+  ligar(true);
 };
 
 iniciar();
