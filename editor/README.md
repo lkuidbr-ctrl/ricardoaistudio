@@ -23,7 +23,10 @@ preview ao vivo e exporta o MP4.
      olha as opções e escolhe a que combina com a frase (ou pula a cena se nenhuma combinar).
      Na aba **Efeitos** aparece a lista das cenas, e dá para tirar a que não gostar;
    - **Recortar a pessoa**: para o texto ficar atrás de você.
-5. Na **coluna da direita**, ajuste o que quiser. O preview atualiza na hora.
+5. Quer mudar algo? Escreva na caixa **"Peça para a IA"** (topo da coluna esquerda), por
+   exemplo "deixa a legenda amarela", "tira o zoom do começo" ou "troca 'Ricado' por 'Ricardo'".
+   A IA ajusta o vídeo; se não gostar, clique em **Desfazer**.
+6. Ou ajuste à mão na **coluna da direita**. O preview atualiza na hora.
    - **Legenda**: estilo, cores, posição, palavras em destaque e **Corrigir o texto**
      (para consertar palavras que a transcrição errou; as duvidosas ficam em amarelo).
    - **Textos**: título-gancho e texto atrás da pessoa. O botão "+ no momento atual"
@@ -32,7 +35,7 @@ preview ao vivo e exporta o MP4.
    - **Áudio**: música com volume automático e efeitos sonoros.
    - **Marca**: cores, logo, @, barra de progresso e tela final. Vale para todos os vídeos
      e liga sozinha quando você preenche.
-6. Clique em **Exportar vídeo**. O arquivo pode ser baixado na hora e também fica salvo
+7. Clique em **Exportar vídeo**. O arquivo pode ser baixado na hora e também fica salvo
    em `editor\out`. Se faltar memória, o Studio tenta de novo sozinho, mais devagar; se
    mesmo assim falhar, o erro fica em `editor\out\<nome>.log`.
 

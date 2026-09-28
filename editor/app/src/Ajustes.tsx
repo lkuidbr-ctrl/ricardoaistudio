@@ -146,16 +146,23 @@ const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["
   const [rascunho, setRascunho] = useState<Record<number, string>>({});
   // Aberto de cara: corrigir a transcrição é o ajuste mais comum.
   const [aberto, setAberto] = useState(true);
+  // Relê quando a legenda muda por fora (IA refez, "Peça para a IA" trocou palavras...).
+  const [versao, setVersao] = useState(0);
+  useEffect(() => {
+    const mudou = () => setVersao((v) => v + 1);
+    window.addEventListener("legenda-mudou", mudou);
+    return () => window.removeEventListener("legenda-mudou", mudou);
+  }, []);
   useEffect(() => {
     if (!aberto) return;
     let vivo = true;
-    get<Palavra[]>(`/${arquivo}`)
+    get<Palavra[]>(`/${arquivo}?v=${versao}`)
       .then((l) => vivo && setPalavras(l))
       .catch(() => vivo && setPalavras(null));
     return () => {
       vivo = false;
     };
-  }, [arquivo, aberto]);
+  }, [arquivo, aberto, versao]);
 
   const frases = palavras ? emFrases(palavras) : [];
   const textoDe = (f: { inicio: number; fim: number }) => palavras!.slice(f.inicio, f.fim).map((p) => p.text.trim()).join(" ");
