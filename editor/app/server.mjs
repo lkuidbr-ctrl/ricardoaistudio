@@ -324,6 +324,8 @@ const precisaConverter = (abs) => {
   return !COMPATIVEIS.has(codec) || [".mkv", ".avi"].includes(path.extname(abs).toLowerCase());
 };
 
+const GENEROS = new Set(["auto", "feminino", "masculino"]);
+
 // Vídeo grande (1080p, 4K de celular) ganha uma cópia leve para o preview não engasgar.
 const precisaPreviewLeve = (abs) => {
   const lados = ffprobe(abs, ["-select_streams", "v:0", "-show_entries", "stream=width,height"]).split(",").map(Number);
@@ -393,7 +395,8 @@ const FERRAMENTAS = {
   },
   dublar: {
     rotulo: "Dublar",
-    args: (v, o) => [py("voz.py"), "dublar", v, "--idioma", o.idioma || "en", ...argsIa(o)],
+    args: (v, o) => [py("voz.py"), "dublar", v, "--idioma", o.idioma || "en", "--genero", GENEROS.has(o.genero) ? o.genero : "auto",
+      ...argsIa(o)],
     novo: (id, o) => irmao(id, `.${o.idioma || "en"}.mp4`),
   },
   clipes: {
@@ -774,7 +777,7 @@ app.post("/api/recortar", (req, res) => {
 
 // Narração: texto digitado vira um vídeo novo.
 app.post("/api/narrar", (req, res) => {
-  const { titulo = "roteiro", texto = "", velocidade = 1, fundo = "" } = req.body || {};
+  const { titulo = "roteiro", texto = "", velocidade = 1, fundo = "", genero = "masculino" } = req.body || {};
   if (!texto.trim()) return res.status(400).json({ erro: "Escreva o roteiro primeiro." });
   const pasta = path.join(PUBLIC, "roteiros");
   fs.mkdirSync(pasta, { recursive: true });
@@ -782,7 +785,7 @@ app.post("/api/narrar", (req, res) => {
   const txt = path.join(pasta, nome);
   fs.writeFileSync(txt, texto, "utf-8");
   const t = novaTarefa("narrar", null, "Narrar roteiro");
-  const args = [py("voz.py"), "narrar", txt, "--velocidade", String(velocidade)];
+  const args = [py("voz.py"), "narrar", txt, "--velocidade", String(velocidade), "--genero", GENEROS.has(genero) ? genero : "masculino"];
   if (fundo) args.push("--fundo", noPublic(fundo));
   rodar(t, pythonExe(), args, {
     aoTerminar: () => {

@@ -95,6 +95,7 @@ export const Ferramentas: React.FC<{
   const [quantos, setQuantos] = useState(3);
   const [vertical, setVertical] = useState(false);
   const [idioma, setIdioma] = useState("en");
+  const [genero, setGenero] = useState("auto");
   const [modelo, setModelo] = useState("small");
 
   const ultima = (tipo: string) => [...tarefas].reverse().find((t) => t.tipo === tipo);
@@ -209,14 +210,21 @@ export const Ferramentas: React.FC<{
       descricao: "Traduz e dubla sua fala em outro idioma. Cria um vídeo novo.",
       precisaLegenda: true,
       opcoes: (
+        <>
+        <select value={genero} onChange={(e) => setGenero(e.target.value)} title="Voz da dublagem">
+          <option value="auto">Voz igual à de quem fala</option>
+          <option value="feminino">Voz feminina</option>
+          <option value="masculino">Voz masculina</option>
+        </select>
         <select value={idioma} onChange={(e) => setIdioma(e.target.value)}>
           <option value="en">Inglês</option>
           <option value="es">Espanhol</option>
           <option value="fr">Francês</option>
           <option value="it">Italiano</option>
         </select>
+        </>
       ),
-      valores: () => ({ idioma }),
+      valores: () => ({ idioma, genero }),
     },
   ];
 
