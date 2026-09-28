@@ -33,6 +33,12 @@ Escolha:
    momentos mais fortes do vídeo.
 4. "gancho": título curto (até 6 palavras) que aparece no começo do vídeo e faz a pessoa
    querer assistir até o fim. Fiel ao que é falado, sem inventar promessa. Sem emoji e sem aspas.
+5. "animacoes": animações prontas por cima do vídeo, só onde reforçam a fala. Cerca de 1 a cada
+   10 a 15 segundos (um vídeo de 1 minuto tem de 3 a 5), nunca nos 2 primeiros segundos.
+   Tipos: "check" (certo, sim, funciona), "xis" (erro, não faça, proibido), "seta" (olha isso,
+   aponta algo), "dinheiro" (dinheiro, ganhar, lucro), "coracao" (amor, saúde, cuidado),
+   "fogo" (incrível, bombando), "like" (curte, segue, aprovado), "explosao" (revelação, choque),
+   "confete" (conquista, comemoração), "brilhos" (novidade, dica de ouro).
 
 Use apenas os índices da lista."""
 
@@ -59,8 +65,21 @@ SCHEMA = {
             },
         },
         "gancho": {"type": "string"},
+        "animacoes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "indice": {"type": "integer"},
+                    "tipo": {"type": "string", "enum": ["check", "xis", "seta", "dinheiro", "coracao", "fogo", "like",
+                                                        "explosao", "confete", "brilhos"]},
+                },
+                "required": ["indice", "tipo"],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": ["destaques", "emojis", "zooms", "gancho"],
+    "required": ["destaques", "emojis", "zooms", "gancho", "animacoes"],
     "additionalProperties": False,
 }
 
@@ -105,7 +124,27 @@ def por_dicionario(words: list[str]) -> dict:
             ultimo = i
     # Sem IA: zoom nas palavras com emoji (o filtro de distância mínima fica em zooms_em_ms).
     zooms = [{"indice": e["indice"], "forte": False} for e in emojis]
-    return {"destaques": destaques, "emojis": emojis, "zooms": zooms, "gancho": ""}
+    animacoes = [{"indice": e["indice"], "tipo": ANIMACAO_DO_EMOJI[e["emoji"]]} for e in emojis if e["emoji"] in ANIMACAO_DO_EMOJI]
+    return {"destaques": destaques, "emojis": emojis, "zooms": zooms, "gancho": "", "animacoes": animacoes}
+
+
+# Sem IA: algumas palavras com emoji também ganham uma animação.
+ANIMACAO_DO_EMOJI = {"💰": "dinheiro", "🤑": "dinheiro", "💸": "dinheiro", "💵": "dinheiro", "❌": "xis", "🚫": "xis",
+                     "✅": "check", "❤️": "coracao", "🔥": "fogo", "👍": "like", "🏆": "confete", "💡": "brilhos"}
+
+
+def animacoes_em_ms(animacoes: list[dict], captions: list[dict], intervalo_ms: int = 6000) -> list[dict]:
+    """Índices da IA -> animações no tempo do vídeo original, sem começo e sem duas coladas."""
+    saida, ultimo = [], -intervalo_ms
+    for a in sorted(animacoes, key=lambda a: a["indice"]):
+        if not 0 <= a["indice"] < len(captions):
+            continue
+        inicio = captions[a["indice"]]["startMs"]
+        if inicio < 2000 or inicio - ultimo < intervalo_ms:
+            continue
+        saida.append({"sourceMs": inicio, "tipo": a["tipo"]})
+        ultimo = inicio
+    return saida
 
 
 def zooms_em_ms(zooms: list[dict], captions: list[dict], intervalo_ms: int = 3000) -> list[dict]:
@@ -165,9 +204,10 @@ def main() -> None:
     anterior = json.loads(edicao_file.read_text(encoding="utf-8")) if edicao_file.exists() else {}
     zooms = zooms_em_ms(result.get("zooms", []), captions)
     gancho = result.get("gancho", "").strip().strip('"').strip()
-    edicao = {"zooms": zooms, "gancho": gancho, "aplicado": anterior.get("aplicado")}
+    animacoes = animacoes_em_ms(result.get("animacoes", []), captions)
+    edicao = {"zooms": zooms, "gancho": gancho, "animacoes": animacoes, "aplicado": anterior.get("aplicado")}
     edicao_file.write_text(json.dumps(edicao, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"zooms: {len(zooms)}" + (f" | gancho: {gancho}" if gancho else ""))
+    print(f"zooms: {len(zooms)} | animações: {len(animacoes)}" + (f" | gancho: {gancho}" if gancho else ""))
     print(f"-> {edicao_file}")
 
 

@@ -1,6 +1,7 @@
 // Coluna direita: todos os ajustes visuais do vídeo, em abas.
 import React, { useEffect, useRef, useState } from "react";
-import type { Broll, BehindText, CaptionStyle, ShortVideoProps, Zoom } from "../../src/schema";
+import type { Animacao, Broll, BehindText, CaptionStyle, ShortVideoProps, Zoom } from "../../src/schema";
+import { COR_ANIMACAO, TIPOS_ANIMACAO } from "../../src/effects/Animacoes";
 import { enviar, formatarTempo, get, type Arquivos } from "./api";
 import { Alternar, Cor, Deslizante, EnviarArquivo, Escolha, Linha, Secao, Texto } from "./campos";
 
@@ -450,9 +451,59 @@ const SecaoCor: React.FC<Pick<Props, "props" | "mudar">> = ({ props, mudar }) =>
   );
 };
 
-const AbaEfeitos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara }) => (
+const nomeAnimacao = (tipo: Animacao["tipo"]) => TIPOS_ANIMACAO.find((t) => t.valor === tipo)?.nome ?? tipo;
+
+const SecaoAnimacoes: React.FC<Props> = ({ props, mudar, agoraMs, irPara }) => {
+  const itens = props.animacoes ?? [];
+  const nova = (): Animacao => ({
+    tipo: "seta",
+    startMs: Math.round(agoraMs()),
+    durationMs: 1600,
+    x: 70,
+    y: 20,
+    tamanho: 1,
+    cor: COR_ANIMACAO.seta,
+  });
+  return (
+    <Secao
+      titulo="Animações"
+      dica="Setas, check, coração, confete... por cima do vídeo. A IA escolhe algumas sozinha."
+      acao={<button className="botao pequeno primario" onClick={() => mudar({ animacoes: [...itens, nova()] })}>+ no momento atual</button>}
+    >
+      <Lista<Animacao>
+        itens={itens}
+        titulo={(a) => nomeAnimacao(a.tipo)}
+        resumo={(a) => `${formatarTempo(a.startMs)} · ${a.durationMs / 1000}s`}
+        inicio={(a) => a.startMs}
+        irPara={irPara}
+        aoMudar={(animacoes) => mudar({ animacoes })}
+        editor={(a, m) => (
+          <>
+            <Escolha
+              rotulo="Animação"
+              valor={a.tipo}
+              opcoes={TIPOS_ANIMACAO}
+              aoMudar={(tipo) => m({ tipo, cor: COR_ANIMACAO[tipo] })}
+            />
+            <Tempo rotulo="Começa em" ms={a.startMs} aoMudar={(startMs) => m({ startMs })} agoraMs={agoraMs} />
+            <Deslizante rotulo="Duração" valor={a.durationMs} min={500} max={5000} passo={100} formato={(v) => `${v / 1000}s`} aoMudar={(durationMs) => m({ durationMs })} />
+            <Deslizante rotulo="Posição (lado)" valor={a.x} min={0} max={100} formato={(v) => `${v}%`} aoMudar={(x) => m({ x })} />
+            <Deslizante rotulo="Posição (altura)" valor={a.y} min={0} max={100} formato={(v) => `${v}%`} aoMudar={(y) => m({ y })} />
+            <Deslizante rotulo="Tamanho" valor={a.tamanho} min={0.4} max={2.5} passo={0.05} formato={(v) => `${Math.round(v * 100)}%`} aoMudar={(tamanho) => m({ tamanho })} />
+            <Cor rotulo="Cor" valor={a.cor} aoMudar={(cor) => m({ cor })} />
+          </>
+        )}
+      />
+    </Secao>
+  );
+};
+
+const AbaEfeitos: React.FC<Props> = (p) => {
+  const { props, mudar, arquivos, agoraMs, irPara } = p;
+  return (
   <>
     <SecaoCor props={props} mudar={mudar} />
+    <SecaoAnimacoes {...p} />
     <Secao
       titulo="Zoom"
       dica="Aproxima a câmera num momento de ênfase."
@@ -555,7 +606,8 @@ const AbaEfeitos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara }
       />
     </Secao>
   </>
-);
+  );
+};
 
 const AbaAudio: React.FC<Props> = ({ props, mudar, arquivos }) => {
   const [musicas, setMusicas] = useState<string[]>([]);

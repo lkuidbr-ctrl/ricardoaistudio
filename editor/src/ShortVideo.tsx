@@ -7,6 +7,7 @@ import { AutoZoom } from "./effects/AutoZoom";
 import { BehindText } from "./effects/BehindText";
 import { Broll } from "./effects/Broll";
 import { CutTransition } from "./effects/CutTransition";
+import { Animacoes } from "./effects/Animacoes";
 import { ComCor } from "./effects/Cor";
 import { CutAudio, CutVideo } from "./effects/CutVideo";
 import { HookTitle } from "./effects/HookTitle";
@@ -76,13 +77,14 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     if (props.emojis) for (const c of captions ?? []) if (c.emoji) events.push({ frame: at(c.startMs), name: "pop" });
     for (const b of broll) events.push({ frame: at(b.startMs), name: b.transition === "glitch" ? "glitch" : "whoosh" });
     for (const t of props.behindTexts) events.push({ frame: at(t.startMs), name: "swoosh" });
+    for (const a of props.animacoes ?? []) events.push({ frame: at(a.startMs), name: a.tipo === "explosao" ? "whoosh" : "pop" });
     if (props.hookText) events.push({ frame: 1, name: "pop" });
     if (ctaFrames > 0) {
       events.push({ frame: durationInFrames - ctaFrames, name: "whoosh" });
       events.push({ frame: durationInFrames - ctaFrames + 38, name: "pop" }); // "clique" no seguir
     }
     return events;
-  }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.hookText, joins, captions, broll]);
+  }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.animacoes, props.hookText, joins, captions, broll]);
 
   if (cuts === undefined || brand === undefined) return null;
 
@@ -137,6 +139,8 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
           <Broll item={b} />
         </Sequence>
       ))}
+
+      {props.animacoes?.length ? <Animacoes itens={props.animacoes} /> : null}
 
       {captions ? <Captions captions={captions} props={captionProps} /> : null}
 

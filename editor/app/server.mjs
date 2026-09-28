@@ -393,6 +393,21 @@ const noVideoCortado = (ms, keep) => {
 const mesmoJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 // Zooms e título-gancho que a IA sugeriu (enrich.py). Só troca o que você não mudou à mão.
+// Animação com a posição, o tamanho e a cor padrão de cada tipo (acima da cabeça, fora do rosto).
+const COR_ANIMACAO = {
+  seta: "#FFE600", circulo: "#FF3B30", sublinhado: "#FFE600", check: "#22C55E", xis: "#EF4444", explosao: "#FFE600",
+  coracao: "#FF3B5C", like: "#FFFFFF", fogo: "#FFFFFF", dinheiro: "#22C55E", confete: "#FFE600", brilhos: "#FFF6A8",
+};
+const novaAnimacao = (tipo, startMs) => ({
+  tipo,
+  startMs,
+  durationMs: tipo === "dinheiro" || tipo === "confete" ? 2500 : 1600,
+  x: tipo === "seta" ? 70 : 50,
+  y: 20,
+  tamanho: 1,
+  cor: COR_ANIMACAO[tipo] ?? "#FFE600",
+});
+
 const aplicarEdicaoIa = (projeto, cfg) => {
   const arq = noPublic(irmao(projeto, ".edicao.json"));
   const edicao = lerJson(arq, null);
@@ -401,11 +416,13 @@ const aplicarEdicaoIa = (projeto, cfg) => {
   const zooms = (edicao.zooms || []).map((z) => ({ atMs: Math.round(noVideoCortado(z.sourceMs, keep)), durationMs: z.durationMs, scale: z.scale }));
   const antes = edicao.aplicado || {};
   if (!cfg.zooms?.length || mesmoJson(cfg.zooms, antes.zooms)) cfg.zooms = zooms;
+  const animacoes = (edicao.animacoes || []).map((a) => novaAnimacao(a.tipo, Math.round(noVideoCortado(a.sourceMs, keep))));
+  if (!cfg.animacoes?.length || mesmoJson(cfg.animacoes, antes.animacoes)) cfg.animacoes = animacoes;
   if (edicao.gancho && (!cfg.hookText || cfg.hookText === antes.gancho)) {
     cfg.hookText = edicao.gancho;
     cfg.hookDurationMs = cfg.hookDurationMs || 2500;
   }
-  salvarJson(arq, { ...edicao, aplicado: { zooms: cfg.zooms, gancho: cfg.hookText } });
+  salvarJson(arq, { ...edicao, aplicado: { zooms: cfg.zooms, gancho: cfg.hookText, animacoes: cfg.animacoes } });
 };
 
 // O que cada ferramenta muda no projeto quando termina.
@@ -500,7 +517,7 @@ app.put("/api/projeto", (req, res) => {
 const AJUSTES_DO_PEDIDO = [
   "captionStyle", "captionColor", "highlightColor", "captionY", "wordsWindowMs", "emojis", "keywords",
   "zooms", "cutTransition", "hookText", "hookDurationMs", "behindTexts", "musicVolume", "duckTo", "sfx", "sfxVolume",
-  "cor",
+  "cor", "animacoes",
 ];
 
 // Legenda em frases com o tempo do vídeo editado, para a IA saber o que é dito e quando.
