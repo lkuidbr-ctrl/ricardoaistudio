@@ -461,6 +461,72 @@ export const ModalExportar: React.FC<{ tarefa: Tarefa; fechar: () => void; cance
   );
 };
 
+// Recortar trecho: marca início e fim num vídeo longo e corta na hora (sem perder qualidade).
+export const ModalRecortar: React.FC<{ projeto: string; fonte: string; fechar: () => void; aoIniciar: (id: string) => void }> = ({
+  projeto,
+  fonte,
+  fechar,
+  aoIniciar,
+}) => {
+  const video = React.useRef<HTMLVideoElement>(null);
+  const [inicio, setInicio] = useState(0);
+  const [fim, setFim] = useState(0);
+  const [erro, setErro] = useState("");
+  const agora = () => Math.round((video.current?.currentTime ?? 0) * 10) / 10;
+  const campo = (rotulo: string, valor: number, set: (v: number) => void) => (
+    <label className="linha">
+      <span className="rotulo">{rotulo}</span>
+      <div className="tempo">
+        <input type="number" min={0} step={0.1} value={valor} onChange={(e) => set(Math.max(0, Number(e.target.value)))} />
+        <span>s</span>
+        <button type="button" className="botao pequeno secundario" onClick={() => set(agora())}>
+          ⏱ marcar aqui
+        </button>
+      </div>
+    </label>
+  );
+  return (
+    <Modal titulo="Recortar trecho" fechar={fechar}>
+      <p className="dica">
+        Para vídeos longos (lives, podcasts): toque o vídeo, marque onde o trecho começa e termina e clique em Recortar. O corte é na
+        exato, em alta qualidade; o trecho vira um vídeo novo e a IA já edita ele. O vídeo original continua igual.
+      </p>
+      <video
+        ref={video}
+        className="video-pronto"
+        style={{ maxHeight: 300 }}
+        src={`/${fonte}`}
+        controls
+        preload="metadata"
+        onLoadedMetadata={(e) => fim === 0 && setFim(Math.round(e.currentTarget.duration * 10) / 10)}
+      />
+      {campo("Começa em", inicio, setInicio)}
+      {campo("Termina em", fim, setFim)}
+      <p className="dica">Trecho de {Math.max(0, fim - inicio).toFixed(1)} s.</p>
+      {erro ? <p className="erro">{erro}</p> : null}
+      <footer>
+        <button className="botao fantasma" onClick={fechar}>
+          Cancelar
+        </button>
+        <button
+          className="botao primario"
+          disabled={fim - inicio < 1}
+          onClick={async () => {
+            try {
+              const { id } = await enviar<{ id: string }>("POST", "/api/recortar", { projeto, inicioMs: inicio * 1000, fimMs: fim * 1000 });
+              aoIniciar(id);
+            } catch (e) {
+              setErro((e as Error).message);
+            }
+          }}
+        >
+          ✂ Recortar
+        </button>
+      </footer>
+    </Modal>
+  );
+};
+
 export const ModalClipes: React.FC<{
   clipes: NonNullable<NonNullable<Tarefa["resultado"]>["clipes"]>;
   fechar: () => void;

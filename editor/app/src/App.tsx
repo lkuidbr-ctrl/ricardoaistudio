@@ -7,7 +7,7 @@ import { Ajustes } from "./Ajustes";
 import { enviar, get, subir, type Arquivos, type Projeto, type Tarefa } from "./api";
 import { Ferramentas, type Ia } from "./Ferramentas";
 import { PecaIa } from "./PecaIa";
-import { ModalChave, ModalClipes, ModalConfig, ModalExportar, ModalNarrar } from "./Modais";
+import { ModalChave, ModalClipes, ModalConfig, ModalExportar, ModalNarrar, ModalRecortar } from "./Modais";
 
 const FPS = 30;
 const SEM_ARQUIVOS: Arquivos = { captions: false, cuts: false, person: false, brollFile: false, emojis: false, audio: false };
@@ -21,6 +21,7 @@ const montarProps = (id: string, salvo: Partial<ShortVideoProps>): ShortVideoPro
   cuts: "",
   brollFile: "",
   audio: "",
+  preview: "",
   hookText: "",
   brand: "",
   music: "",
@@ -57,7 +58,7 @@ export const App: React.FC = () => {
   const [erroPreview, setErroPreview] = useState("");
   const [tarefas, setTarefas] = useState<Record<string, Tarefa>>({});
   const [ia, setIaEstado] = useState<Ia>(() => lerLocal("ia-escolhida", "claude") as Ia);
-  const [modal, setModal] = useState<null | "narrar" | "config" | "exportar" | "chave">(null);
+  const [modal, setModal] = useState<null | "narrar" | "config" | "exportar" | "chave" | "recortar">(null);
   // Tem chave do Claude salva? (null = ainda não sei)
   const [temChave, setTemChave] = useState<boolean | null>(null);
   // Vídeo esperando a chave para a IA editar.
@@ -169,7 +170,7 @@ export const App: React.FC = () => {
       vivo = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props?.video, props?.cuts, props?.captions, props?.person, props?.brollFile, props?.music, props?.brand, props?.audio]);
+  }, [props?.video, props?.cuts, props?.captions, props?.person, props?.brollFile, props?.music, props?.brand, props?.audio, props?.preview]);
 
   const mudar = useCallback((parcial: Partial<ShortVideoProps>) => setProps((p) => (p ? { ...p, ...parcial } : p)), []);
 
@@ -217,7 +218,7 @@ export const App: React.FC = () => {
         await carregarProjetos();
         await abrirProjeto(t.resultado.novoProjeto);
         // Vídeo novo que acabou de chegar: a IA já edita sozinha.
-        if (t.tipo === "converter") editarAutomaticoRef.current(t.resultado.novoProjeto);
+        if (t.tipo === "converter" || t.tipo === "recortar") editarAutomaticoRef.current(t.resultado.novoProjeto);
         return;
       }
       if (t.resultado?.recarregar) {
@@ -243,6 +244,7 @@ export const App: React.FC = () => {
           person: c.person ?? "",
           brollFile: c.brollFile ?? "",
           audio: c.audio ?? "",
+          preview: c.preview ?? "",
           ...(t.tipo === "cor" && c.cor ? { cor: c.cor } : {}),
           ...(t.tipo === "emojis"
             ? {
@@ -532,6 +534,7 @@ export const App: React.FC = () => {
                 cancelar={cancelar}
                 ia={ia}
                 setIa={setIa}
+                abrirRecorte={() => setModal("recortar")}
               />
             ) : null}
           </aside>
@@ -630,6 +633,18 @@ export const App: React.FC = () => {
           aoAtualizar={(id) => acompanhar(id, "Atualizar o Studio", "atualizar", null)}
           aoMudarChave={setTemChave}
           tarefaAtualizar={Object.values(tarefas).filter((t) => t.tipo === "atualizar").pop()}
+        />
+      ) : null}
+      {modal === "recortar" && atual && props ? (
+        <ModalRecortar
+          projeto={atual}
+          fonte={props.preview || atual}
+          fechar={() => setModal(null)}
+          aoIniciar={(id) => {
+            acompanhar(id, "Recortar trecho", "recortar", atual);
+            setModal(null);
+            avisar("Recortando... o trecho abre sozinho e a IA já começa a editar.");
+          }}
         />
       ) : null}
       {modal === "chave" ? (

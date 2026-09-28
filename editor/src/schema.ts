@@ -61,6 +61,8 @@ export const brollSchema = z.object({
 export const shortVideoSchema = z.object({
   // Arquivos dentro de public/ (ex.: "meu-video.mp4").
   video: z.string(),
+  // Cópia leve do vídeo, usada só no preview (a exportação usa sempre o "video"). Vazio = sem cópia.
+  preview: z.string(),
   // Gerado por scripts/transcribe.py. Deixe vazio para não ter legenda.
   captions: z.string(),
   // Gerado por scripts/segment.py. Necessário para o texto atrás da pessoa.

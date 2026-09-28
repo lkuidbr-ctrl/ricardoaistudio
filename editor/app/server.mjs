@@ -128,6 +128,7 @@ const GERADOS = {
   person: ".person.webm",
   brollFile: ".broll.json",
   audio: ".voz.m4a",
+  preview: ".proxy.mp4",
 };
 
 const listarProjetos = () => {
@@ -139,7 +140,7 @@ const listarProjetos = () => {
         if (profundidade < 2 && !PASTAS_IGNORADAS.has(item.name) && !item.name.startsWith(".")) varrer(abs, profundidade + 1);
         continue;
       }
-      if (!VIDEO_EXT.has(path.extname(item.name).toLowerCase()) || item.name.endsWith(".person.webm")) continue;
+      if (!VIDEO_EXT.has(path.extname(item.name).toLowerCase()) || /\.(person\.webm|proxy\.mp4)$/.test(item.name)) continue;
       const rel = relPublic(abs);
       const st = fs.statSync(abs);
       projetos.push({ id: rel, nome: item.name, pasta: path.dirname(rel) === "." ? "" : path.dirname(rel), tamanho: st.size, modificado: st.mtimeMs });
@@ -319,6 +320,20 @@ const precisaConverter = (abs) => {
   return !COMPATIVEIS.has(codec) || [".mkv", ".avi"].includes(path.extname(abs).toLowerCase());
 };
 
+// Vídeo grande (1080p, 4K de celular) ganha uma cópia leve para o preview não engasgar.
+const precisaPreviewLeve = (abs) => {
+  const lados = ffprobe(abs, ["-select_streams", "v:0", "-show_entries", "stream=width,height"]).split(",").map(Number);
+  return Math.min(...lados.filter(Boolean)) > 700;
+};
+// Compressão rápida para as cópias leves (VP9 só nos testes automatizados, onde o navegador não toca H.264).
+const codecLeve = () =>
+  process.env.STUDIO_CODEC_ALVO === "vp9"
+    ? ["-c:v", "libvpx-vp9", "-crf", "36", "-b:v", "0", "-deadline", "realtime", "-cpu-used", "8", "-c:a", "libopus"]
+    : ["-c:v", "libx264", "-crf", "28", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k",
+       "-movflags", "+faststart"];
+// Programa que roda cada ferramenta: script Python (padrão) ou um comando próprio.
+const comandoDa = (f, abs, opcoes) => (f.comando ? f.comando(abs, opcoes) : { exe: pythonExe(), args: f.args(abs, opcoes) });
+
 // Cada ferramenta: rótulo, argumentos do script e o que muda no projeto quando termina.
 const FERRAMENTAS = {
   transcrever: {
@@ -341,6 +356,16 @@ const FERRAMENTAS = {
     rotulo: "B-roll automático",
     args: (v, o) => [py("broll.py"), v, ...argsIa(o)],
     campo: "brollFile",
+  },
+  // Cópia leve (960 px de altura) só para o preview; a exportação usa sempre o original.
+  preview: {
+    rotulo: "Preparar o preview leve",
+    comando: (v) => ({
+      exe: process.execPath,
+      args: [REMOTION_CLI, "ffmpeg", "-y", "-hide_banner", "-i", v, "-vf", "scale=-2:960", ...codecLeve(),
+        irmao(v, ".proxy.mp4")],
+    }),
+    campo: "preview",
   },
   cor: {
     rotulo: "Corrigir cor",
@@ -449,6 +474,7 @@ const aplicarFerramenta = (projeto, f) => {
 const rodarAutomatico = (t, projeto, opcoes) => {
   const tem = (suf) => fs.existsSync(noPublic(irmao(projeto, suf)));
   const passos = [];
+  if (!tem(".proxy.mp4") && precisaPreviewLeve(noPublic(projeto))) passos.push("preview");
   if (!tem(".captions.json")) passos.push("transcrever");
   if (!tem(".cuts.json")) passos.push("cortar");
   if (!tem(".voz.m4a")) passos.push("audio");
@@ -470,7 +496,8 @@ const rodarAutomatico = (t, projeto, opcoes) => {
     t.progresso = null;
     t.etapa = `Passo ${i + 1} de ${passos.length}: ${f.rotulo}`;
     registrar(t, `━━ ${t.etapa}`);
-    rodar(t, pythonExe(), f.args(noPublic(projeto), { ...opcoes, modelo: "small" }), {
+    const cmd = comandoDa(f, noPublic(projeto), { ...opcoes, modelo: "small" });
+    rodar(t, cmd.exe, cmd.args, {
       env: envDasChaves(),
       aoTerminar: () => {
         aplicarFerramenta(projeto, f);
@@ -631,7 +658,7 @@ app.put("/api/broll", (req, res) => {
 app.delete("/api/projeto", (req, res) => {
   const id = String(req.query.id || "");
   const base = noPublic(id).replace(/\.[^./\\]+$/, "");
-  for (const suf of ["", ".captions.json", ".cuts.json", ".person.webm", ".broll.json", ".edicao.json", ".voz.m4a", ".cor.json", ".settings.json", ".props.json"]) {
+  for (const suf of ["", ".captions.json", ".cuts.json", ".person.webm", ".broll.json", ".edicao.json", ".voz.m4a", ".cor.json", ".proxy.mp4", ".settings.json", ".props.json"]) {
     const alvo = suf ? base + suf : noPublic(id);
     fs.rmSync(alvo, { force: true });
   }
@@ -699,7 +726,8 @@ app.post("/api/tarefas", (req, res) => {
     return res.status(400).json({ erro: "Gere as legendas primeiro (botão \"Gerar legendas\")." });
   }
   const t = novaTarefa(ferramenta, projeto, f.rotulo);
-  rodar(t, pythonExe(), f.args(noPublic(projeto), opcoes), {
+  const cmd = comandoDa(f, noPublic(projeto), opcoes);
+  rodar(t, cmd.exe, cmd.args, {
     env: envDasChaves(),
     aoTerminar: () => {
       aplicarFerramenta(projeto, f);
@@ -711,6 +739,31 @@ app.post("/api/tarefas", (req, res) => {
       }
       return null;
     },
+  });
+  res.json({ id: t.id });
+});
+
+// Recortar trecho: corta exatamente entre início e fim (refaz só o trecho, em alta qualidade) e cria
+// um vídeo novo. O corte "sem refazer" só começa em quadro-chave, que pode estar segundos antes.
+app.post("/api/recortar", (req, res) => {
+  const { projeto, inicioMs, fimMs } = req.body || {};
+  if (!fs.existsSync(noPublic(projeto))) return res.status(404).json({ erro: "vídeo não encontrado" });
+  const ini = Math.max(0, Number(inicioMs) || 0);
+  const fim = Number(fimMs) || 0;
+  if (fim - ini < 1000) return res.status(400).json({ erro: "O trecho precisa ter pelo menos 1 segundo." });
+  const abs = noPublic(projeto);
+  const ext = path.extname(abs);
+  const base = path.basename(abs, ext);
+  const destino = path.join(path.dirname(abs), semColisao(path.dirname(abs), `${base}-trecho${ext}`));
+  const t = novaTarefa("recortar", projeto, "Recortar trecho");
+  t.duracaoS = (fim - ini) / 1000; // para a barra de progresso
+  const codec = process.env.STUDIO_CODEC_ALVO === "vp9"
+    ? ["-c:v", "libvpx-vp9", "-crf", "30", "-b:v", "0", "-deadline", "realtime", "-cpu-used", "8", "-c:a", "libopus"]
+    : ["-c:v", "libx264", "-crf", "17", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+       "-movflags", "+faststart"];
+  rodar(t, process.execPath, [REMOTION_CLI, "ffmpeg", "-y", "-hide_banner", "-ss", (ini / 1000).toFixed(3), "-i", abs,
+    "-t", ((fim - ini) / 1000).toFixed(3), ...codec, destino], {
+    aoTerminar: () => ({ novoProjeto: relPublic(destino) }),
   });
   res.json({ id: t.id });
 });

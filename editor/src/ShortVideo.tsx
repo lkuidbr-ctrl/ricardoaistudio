@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { AbsoluteFill, Freeze, Sequence, useVideoConfig } from "remotion";
+import { AbsoluteFill, Freeze, getRemotionEnvironment, Sequence, useVideoConfig } from "remotion";
 import { useBrand } from "./brand";
 import { Captions } from "./captions/Captions";
 import { BrandOverlay, EndCard } from "./effects/BrandOverlay";
@@ -86,6 +86,9 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     return events;
   }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.animacoes, props.hookText, joins, captions, broll]);
 
+  // No preview usa a cópia leve (se houver); na exportação, sempre o vídeo original.
+  const fonte = !getRemotionEnvironment().isRendering && props.preview ? props.preview : props.video;
+
   if (cuts === undefined || brand === undefined) return null;
 
   return (
@@ -94,7 +97,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
         <CutTransition kind={props.cutTransition} joins={joins}>
           {props.video ? (
             <ComCor cor={props.cor} id="cor-video">
-              <CutVideo src={props.video} timeline={timeline} muted={Boolean(props.audio)} />
+              <CutVideo src={fonte} timeline={timeline} muted={Boolean(props.audio)} />
             </ComCor>
           ) : null}
           {props.audio ? <CutAudio src={props.audio} timeline={timeline} /> : null}
@@ -124,7 +127,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
         <Sequence from={fimDaFala} durationInFrames={ctaFrames}>
           <Freeze frame={Math.max(0, timeline.totalFrames - 1)}>
             <ComCor cor={props.cor} id="cor-final">
-              <CutVideo src={props.video} timeline={timeline} muted />
+              <CutVideo src={fonte} timeline={timeline} muted />
             </ComCor>
           </Freeze>
         </Sequence>

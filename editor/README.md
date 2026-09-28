@@ -43,6 +43,10 @@ preview ao vivo e exporta o MP4.
    mesmo assim falhar, o erro fica em `editor\out\<nome>.log`.
 
 Outras opções:
+- **Recortar trecho**: num vídeo longo (live, podcast), marque início e fim; o trecho vira um
+  vídeo novo e a IA já edita ele.
+- **Preview leve**: vídeos grandes (1080p, 4K) ganham uma cópia pequena só para o preview,
+  para o computador não engasgar. A exportação usa sempre o original.
 - **Narrar roteiro**, no topo: cria um vídeo a partir de um texto, com voz por IA.
 - **Gerar clipes**: corta uma live ou um podcast em vários shorts.
 - **Converter para vertical**: transforma um vídeo deitado em 9:16.
