@@ -469,7 +469,7 @@ export const App: React.FC = () => {
           title={exportando ? "Ver o andamento da exportação" : ""}
           style={exportando ? ({ "--pct": `${pctExportacao}%` } as React.CSSProperties) : undefined}
         >
-          {exportando ? `Exportando... ${pctExportacao}%` : "Exportar vídeo"}
+          {exportando ? (pctExportacao > 0 ? `Exportando... ${pctExportacao}%` : "Exportando... preparando") : "Exportar vídeo"}
         </button>
       </header>
 
