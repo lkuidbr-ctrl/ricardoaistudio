@@ -100,40 +100,76 @@ export const ModalNarrar: React.FC<{ fechar: () => void; aoIniciar: (id: string)
   );
 };
 
-// Pede a chave do Claude antes da IA editar (aparece quando ainda não há chave salva).
+// Pede a chave do Claude antes da IA editar (aparece quando a chave falta ou não funcionou).
+// Chave já salva não precisa ser colada de novo: só testar (e, se pedir, o ID do workspace).
 export const ModalChave: React.FC<{ fechar: () => void; aoSalvar: () => void; semIa: () => void }> = ({ fechar, aoSalvar, semIa }) => {
+  const [salva, setSalva] = useState<{ temClaude: boolean; claudeFinal: string } | null>(null);
   const [chave, setChave] = useState("");
+  const [workspace, setWorkspace] = useState("");
+  const [pedeWorkspace, setPedeWorkspace] = useState(false);
   const [estado, setEstado] = useState<"" | "testando" | string>("");
-  const salvar = async () => {
+  useEffect(() => {
+    get<{ temClaude: boolean; claudeFinal: string }>("/api/config").then(setSalva).catch(() => {});
+  }, []);
+
+  const testar = async () => {
     setEstado("testando");
     try {
-      await enviar("PUT", "/api/config", { claudeKey: chave });
-      const r = await enviar<{ ok: boolean; motivo?: string }>("POST", "/api/claude/testar");
+      if (chave.trim()) await enviar("PUT", "/api/config", { claudeKey: chave });
+      if (workspace.trim()) await enviar("PUT", "/api/config", { claudeWorkspace: workspace });
+      const r = await enviar<{ ok: boolean; motivo?: string; pedeWorkspace?: boolean }>("POST", "/api/claude/testar");
       if (r.ok) return aoSalvar();
+      setPedeWorkspace(Boolean(r.pedeWorkspace));
       setEstado(r.motivo || "A chave não funcionou.");
+      get<{ temClaude: boolean; claudeFinal: string }>("/api/config").then(setSalva).catch(() => {});
     } catch (e) {
       setEstado((e as Error).message);
     }
   };
+  const podeTestar = Boolean(chave.trim() || salva?.temClaude) && estado !== "testando";
+
   return (
-    <Modal titulo="Cole sua chave do Claude" fechar={fechar}>
+    <Modal titulo="Chave do Claude" fechar={fechar}>
       <p className="dica">
         Para a IA editar seus vídeos sozinha (legenda, destaques, zooms, título e B-roll), o Studio precisa da sua chave da API do
-        Claude. Você cola uma vez só: ela fica guardada no seu computador.
+        Claude. Ela fica guardada no seu computador: não precisa colar de novo.
       </p>
-      <p className="dica">
-        Crie em{" "}
-        <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noreferrer">
-          platform.claude.com → API Keys
-        </a>{" "}
-        (começa com <b>sk-ant-api</b>). Ela usa os créditos da API, não a assinatura.
-      </p>
+      {salva?.temClaude ? (
+        <p className="ok-texto">✓ Sua chave já está salva (termina em ...{salva.claudeFinal}). Só cole outra se quiser trocar.</p>
+      ) : (
+        <p className="dica">
+          Crie em{" "}
+          <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noreferrer">
+            platform.claude.com → API Keys
+          </a>{" "}
+          (começa com <b>sk-ant-api</b>). Ela usa os créditos da API, não a assinatura.
+        </p>
+      )}
       <div className="linha-form">
-        <input type="password" placeholder="sk-ant-api03-..." value={chave} autoFocus onChange={(e) => { setChave(e.target.value); setEstado(""); }} />
-        <button className="botao primario" disabled={!chave.trim() || estado === "testando"} onClick={salvar}>
-          {estado === "testando" ? "Testando..." : "Salvar e continuar"}
+        <input
+          type="password"
+          placeholder={salva?.temClaude ? "(opcional) colar outra chave" : "sk-ant-api03-..."}
+          value={chave}
+          autoFocus={!salva?.temClaude}
+          onChange={(e) => {
+            setChave(e.target.value);
+            setEstado("");
+          }}
+        />
+        <button className="botao primario" disabled={!podeTestar} onClick={testar}>
+          {estado === "testando" ? "Testando..." : salva?.temClaude && !chave.trim() ? "Testar e continuar" : "Salvar e continuar"}
         </button>
       </div>
+      {pedeWorkspace ? (
+        <div className="linha-form">
+          <input
+            type="text"
+            placeholder="ID do workspace: wrkspc_..."
+            value={workspace}
+            onChange={(e) => setWorkspace(e.target.value)}
+          />
+        </div>
+      ) : null}
       {estado && estado !== "testando" ? <p className="alerta">{estado}</p> : null}
       <footer>
         <button className="link" onClick={semIa}>
@@ -160,11 +196,18 @@ export const ModalConfig: React.FC<{
     get<{ versao: string | null; git: boolean }>("/api/versao").then(setVersao).catch(() => {});
   }, [tarefaAtualizar?.status]);
   const [claude, setClaude] = useState<{ instalado: boolean; texto: string } | null>(null);
-  const [cfg, setCfg] = useState<{ temPexels: boolean; temClaude: boolean; claudeFinal: string; claudeModelo: string } | null>(null);
+  const [cfg, setCfg] = useState<{
+    temPexels: boolean;
+    temClaude: boolean;
+    claudeFinal: string;
+    claudeModelo: string;
+    claudeWorkspace: string;
+  } | null>(null);
   const [chave, setChave] = useState("");
   const [salvo, setSalvo] = useState(false);
   const [chaveClaude, setChaveClaude] = useState("");
-  const [teste, setTeste] = useState<{ ok: boolean; motivo?: string; aviso?: string } | "testando" | null>(null);
+  const [teste, setTeste] = useState<{ ok: boolean; motivo?: string; aviso?: string; pedeWorkspace?: boolean } | "testando" | null>(null);
+  const [workspace, setWorkspace] = useState("");
   const temPexels = Boolean(cfg?.temPexels);
 
   const atualizar = () => {
@@ -174,7 +217,10 @@ export const ModalConfig: React.FC<{
   const testar = async () => {
     setTeste("testando");
     try {
-      setTeste(await enviar<{ ok: boolean; motivo?: string; aviso?: string }>("POST", "/api/claude/testar"));
+      const r = await enviar<{ ok: boolean; motivo?: string; aviso?: string; pedeWorkspace?: boolean }>("POST", "/api/claude/testar");
+      setTeste(r);
+      aoMudarChave(r.ok);
+      atualizar();
     } catch (e) {
       setTeste({ ok: false, motivo: (e as Error).message });
     }
@@ -263,7 +309,6 @@ export const ModalConfig: React.FC<{
               testar();
               // Colou a chave: a IA passa a ser o Claude.
               setIa("claude");
-              aoMudarChave(true);
             }}
           >
             Salvar e testar
@@ -293,6 +338,27 @@ export const ModalConfig: React.FC<{
           ) : (
             <p className="alerta">{teste.motivo}</p>
           )
+        ) : null}
+        {(teste && teste !== "testando" && teste.pedeWorkspace) || cfg?.claudeWorkspace ? (
+          <div className="linha-form">
+            <input
+              type="text"
+              placeholder={cfg?.claudeWorkspace ? `Workspace: ${cfg.claudeWorkspace}` : "ID do workspace: wrkspc_..."}
+              value={workspace}
+              onChange={(e) => setWorkspace(e.target.value)}
+            />
+            <button
+              className="botao secundario"
+              disabled={!workspace.trim()}
+              onClick={async () => {
+                await enviar("PUT", "/api/config", { claudeWorkspace: workspace });
+                setWorkspace("");
+                testar();
+              }}
+            >
+              Salvar e testar
+            </button>
+          </div>
         ) : null}
         <label className="linha" style={{ marginTop: 12 }}>
           <span className="rotulo">Modelo</span>
