@@ -34,6 +34,8 @@ Escolha momentos para cobrir com B-roll (imagens de apoio de banco de vídeos):
 - Prefira palavras concretas e visuais (dinheiro, celular, academia, cidade, comida...).
 - "indice": a palavra onde a cena começa. "duracao": entre 1.5 e 3 segundos.
 - "busca": 2 a 4 palavras EM INGLÊS para buscar no Pexels (ex.: "counting money cash").
+  Leve em conta o assunto e o público do vídeo inteiro: se o vídeo fala com mulheres, por
+  exemplo, busque imagens de mulheres ("woman heart palpitations", não só "heart palpitations").
 - "modo": "full" (tela cheia) ou "pip" (cartão no topo, a pessoa continua aparecendo). Alterne."""
 
 SCHEMA = {
@@ -127,7 +129,9 @@ ESCOLHA_INSTRUCOES = """Você escolhe B-roll (imagens de apoio) para vídeos cur
 Vou mostrar a frase falada naquele momento do vídeo e miniaturas de vídeos de banco de imagens.
 Escolha a miniatura que ILUSTRA MELHOR o sentido da frase para quem está assistindo.
 Se nenhuma tiver relação clara com a frase, responda -1: é melhor não ter B-roll do que ter
-uma imagem sem nada a ver."""
+uma imagem sem nada a ver.
+Respeite o assunto e o público do vídeo inteiro (ex.: num vídeo para mulheres, não escolha um
+homem como protagonista da imagem)."""
 
 ESCOLHA_SCHEMA = {
     "type": "object",
@@ -145,12 +149,18 @@ def miniatura(video: dict) -> str | None:
     return url + ("&" if "?" in url else "?") + "auto=compress&w=360"
 
 
-def escolher_com_visao(args, frase: str, busca: str, candidatos: list[tuple[dict, dict]]) -> int:
+def escolher_com_visao(args, frase: str, busca: str, candidatos: list[tuple[dict, dict]], contexto: str = "") -> int:
     """Índice do candidato que combina com a frase, ou -1 se nenhum combina.
     Só o Claude enxerga imagens; nas outras IAs fica o primeiro resultado do Pexels."""
     if args.ia != "claude":
         return 0
-    conteudo: list[dict] = [{"type": "text", "text": f'Frase falada: "{frase}"\nBusca usada no banco de imagens: "{busca}"'}]
+    conteudo: list[dict] = [
+        {
+            "type": "text",
+            "text": f'Começo do vídeo (para saber o assunto e o público): "{contexto}"\n'
+            f'Frase falada neste momento: "{frase}"\nBusca usada no banco de imagens: "{busca}"',
+        }
+    ]
     validos = 0
     for i, (video, _arquivo) in enumerate(candidatos):
         url = miniatura(video)
@@ -218,6 +228,8 @@ def main() -> None:
     transicoes = ["zoom", "slide", "glitch", "fade"]
     itens, creditos = [], []
     visao_avisada = False
+    # Assunto e público do vídeo, para a IA não escolher, por exemplo, um homem num vídeo para mulheres.
+    contexto = "".join(c["text"] for c in captions)[:600].strip()
     for n, cena in enumerate(cenas):
         palavra = captions[cena["indice"]]
         duracao_ms = round(min(3.0, max(1.5, cena["duracao"])) * 1000)
@@ -229,7 +241,9 @@ def main() -> None:
             print("         (nada encontrado no Pexels, pulando)")
             continue
         try:
-            escolha = escolher_com_visao(args, frase_em_volta(captions, cena["indice"]), cena["busca"], candidatos)
+            escolha = escolher_com_visao(
+                args, frase_em_volta(captions, cena["indice"]), cena["busca"], candidatos, contexto
+            )
         except IaIndisponivel as e:
             if not visao_avisada:
                 avisar_sem_ia(e)
