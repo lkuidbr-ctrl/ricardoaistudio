@@ -73,6 +73,7 @@ export const defaultProps: ShortVideoProps = {
   brollFile: "",
   music: "",
   audio: "",
+  cor: { brilho: 1, contraste: 1, saturacao: 1, temperatura: 0, sombras: 0 },
   musicVolume: 0.25,
   duckTo: 0.3,
   sfx: true,

@@ -242,6 +242,7 @@ export const App: React.FC = () => {
           person: c.person ?? "",
           brollFile: c.brollFile ?? "",
           audio: c.audio ?? "",
+          ...(t.tipo === "cor" && c.cor ? { cor: c.cor } : {}),
           ...(t.tipo === "emojis"
             ? { emojis: true, captions: `${c.captions}`, zooms: c.zooms ?? [], hookText: c.hookText ?? "", hookDurationMs: c.hookDurationMs ?? 2500 }
             : {}),

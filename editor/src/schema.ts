@@ -13,6 +13,15 @@ export const zoomSchema = z.object({
   scale: z.number().min(1).max(3),
 });
 
+// Correção de cor (1 = sem mudança; temperatura -1 frio .. 1 quente; sombras 0 .. 1 = abre mais).
+export const corSchema = z.object({
+  brilho: z.number().min(0.5).max(1.6),
+  contraste: z.number().min(0.6).max(1.5),
+  saturacao: z.number().min(0).max(2),
+  temperatura: z.number().min(-1).max(1),
+  sombras: z.number().min(0).max(1),
+});
+
 export const behindTextSchema = z.object({
   text: z.string(),
   startMs: z.number().min(0),
@@ -65,6 +74,8 @@ export const shortVideoSchema = z.object({
   // Efeito em cada emenda do corte de silêncios (precisa do campo cuts).
   cutTransition: z.enum(cutTransitions),
   broll: z.array(brollSchema),
+  // Correção de cor do vídeo (scripts/cor.py sugere; dá para ajustar na aba Efeitos).
+  cor: corSchema,
   // Áudio da voz melhorado (scripts/audio.py: sem ruído e no volume certo). Vazio = som original.
   audio: z.string(),
   // Música de fundo (mp3/wav em public/). Vazio = sem música.
@@ -83,6 +94,7 @@ export const shortVideoSchema = z.object({
 export type ShortVideoProps = z.infer<typeof shortVideoSchema>;
 export type BehindText = z.infer<typeof behindTextSchema>;
 export type Zoom = z.infer<typeof zoomSchema>;
+export type Cor = z.infer<typeof corSchema>;
 export type Broll = z.infer<typeof brollSchema>;
 export type CutTransition = (typeof cutTransitions)[number];
 export type CaptionStyle = (typeof captionStyles)[number];

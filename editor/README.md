@@ -19,6 +19,7 @@ preview ao vivo e exporta o MP4.
    - **Gerar legendas**: sempre o primeiro passo;
    - **Cortar silêncios**: tira pausas e "éé";
    - **Melhorar áudio**: tira o ruído de fundo e deixa a voz no volume certo das redes;
+   - **Corrigir cor**: acerta brilho, contraste, cores e sombras sozinho (ajuste fino em Efeitos > Cor);
    - **Emojis e destaques**: a IA escolhe palavras-chave e emojis;
    - **B-roll automático**: vídeos grátis do Pexels nos momentos certos. Com o Claude, a IA
      olha as opções e escolhe a que combina com a frase (ou pula a cena se nenhuma combinar).

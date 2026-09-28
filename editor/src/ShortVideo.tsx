@@ -7,6 +7,7 @@ import { AutoZoom } from "./effects/AutoZoom";
 import { BehindText } from "./effects/BehindText";
 import { Broll } from "./effects/Broll";
 import { CutTransition } from "./effects/CutTransition";
+import { ComCor } from "./effects/Cor";
 import { CutAudio, CutVideo } from "./effects/CutVideo";
 import { HookTitle } from "./effects/HookTitle";
 import { Music, SoundEffects, type SfxEvent } from "./effects/Sound";
@@ -89,7 +90,11 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     <AbsoluteFill style={{ backgroundColor: "black" }}>
       <AutoZoom zooms={props.zooms}>
         <CutTransition kind={props.cutTransition} joins={joins}>
-          {props.video ? <CutVideo src={props.video} timeline={timeline} muted={Boolean(props.audio)} /> : null}
+          {props.video ? (
+            <ComCor cor={props.cor} id="cor-video">
+              <CutVideo src={props.video} timeline={timeline} muted={Boolean(props.audio)} />
+            </ComCor>
+          ) : null}
           {props.audio ? <CutAudio src={props.audio} timeline={timeline} /> : null}
 
           {props.behindTexts.map((t, i) => (
@@ -104,7 +109,9 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
 
           {props.person && props.behindTexts.length > 0 ? (
             <AbsoluteFill>
-              <CutVideo src={props.person} timeline={timeline} transparent muted />
+              <ComCor cor={props.cor} id="cor-pessoa">
+                <CutVideo src={props.person} timeline={timeline} transparent muted />
+              </ComCor>
             </AbsoluteFill>
           ) : null}
         </CutTransition>
@@ -114,7 +121,9 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
       {ctaFrames > 0 && props.video ? (
         <Sequence from={fimDaFala} durationInFrames={ctaFrames}>
           <Freeze frame={Math.max(0, timeline.totalFrames - 1)}>
-            <CutVideo src={props.video} timeline={timeline} muted />
+            <ComCor cor={props.cor} id="cor-final">
+              <CutVideo src={props.video} timeline={timeline} muted />
+            </ComCor>
           </Freeze>
         </Sequence>
       ) : null}

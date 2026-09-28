@@ -406,8 +406,53 @@ const BrollAutomatico: React.FC<{ arquivo: string; mudar: Props["mudar"] }> = ({
   );
 };
 
+const COR_NEUTRA = { brilho: 1, contraste: 1, saturacao: 1, temperatura: 0, sombras: 0 };
+const pct = (v: number) => `${v >= 1 ? "+" : ""}${Math.round((v - 1) * 100)}%`;
+
+const SecaoCor: React.FC<Pick<Props, "props" | "mudar">> = ({ props, mudar }) => {
+  const cor = props.cor ?? COR_NEUTRA;
+  const m = (parcial: Partial<typeof cor>) => mudar({ cor: { ...cor, ...parcial } });
+  const mexida = Object.entries(COR_NEUTRA).some(([k, v]) => cor[k as keyof typeof cor] !== v);
+  return (
+    <Secao
+      titulo="Cor"
+      dica='Use "Corrigir cor", na coluna da esquerda, para a correção automática. Aqui você ajusta à mão.'
+      acao={
+        mexida ? (
+          <button className="botao pequeno fantasma" onClick={() => mudar({ cor: COR_NEUTRA })}>
+            Voltar ao original
+          </button>
+        ) : undefined
+      }
+    >
+      <Deslizante rotulo="Brilho" valor={cor.brilho} min={0.6} max={1.5} passo={0.01} formato={pct} aoMudar={(brilho) => m({ brilho })} />
+      <Deslizante rotulo="Contraste" valor={cor.contraste} min={0.7} max={1.4} passo={0.01} formato={pct} aoMudar={(contraste) => m({ contraste })} />
+      <Deslizante rotulo="Saturação (cores)" valor={cor.saturacao} min={0} max={1.8} passo={0.01} formato={pct} aoMudar={(saturacao) => m({ saturacao })} />
+      <Deslizante
+        rotulo="Temperatura"
+        valor={cor.temperatura}
+        min={-1}
+        max={1}
+        passo={0.05}
+        formato={(v) => (v === 0 ? "normal" : v < 0 ? `mais frio ${Math.round(-v * 100)}%` : `mais quente ${Math.round(v * 100)}%`)}
+        aoMudar={(temperatura) => m({ temperatura })}
+      />
+      <Deslizante
+        rotulo="Clarear sombras"
+        valor={cor.sombras}
+        min={0}
+        max={1}
+        passo={0.05}
+        formato={(v) => (v === 0 ? "não" : `${Math.round(v * 100)}%`)}
+        aoMudar={(sombras) => m({ sombras })}
+      />
+    </Secao>
+  );
+};
+
 const AbaEfeitos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara }) => (
   <>
+    <SecaoCor props={props} mudar={mudar} />
     <Secao
       titulo="Zoom"
       dica="Aproxima a câmera num momento de ênfase."

@@ -342,6 +342,11 @@ const FERRAMENTAS = {
     args: (v, o) => [py("broll.py"), v, ...argsIa(o)],
     campo: "brollFile",
   },
+  cor: {
+    rotulo: "Corrigir cor",
+    args: (v) => [py("cor.py"), v],
+    cor: true,
+  },
   audio: {
     rotulo: "Melhorar áudio",
     args: (v) => [py("audio.py"), v],
@@ -405,6 +410,16 @@ const aplicarEdicaoIa = (projeto, cfg) => {
 
 // O que cada ferramenta muda no projeto quando termina.
 const aplicarFerramenta = (projeto, f) => {
+  if (f.cor) {
+    // A cor sugerida vira o ajuste de cor do projeto (dá para mexer depois na aba Efeitos).
+    const cor = lerJson(noPublic(irmao(projeto, ".cor.json")), null);
+    if (cor) {
+      const cfg = configuracoesDoProjeto(projeto);
+      cfg.cor = cor;
+      salvarConfiguracoes(projeto, cfg);
+    }
+    return;
+  }
   if (!f.campo && !f.extra) return;
   const cfg = configuracoesDoProjeto(projeto);
   if (f.campo) cfg[f.campo] = irmao(projeto, GERADOS[f.campo]);
@@ -420,6 +435,7 @@ const rodarAutomatico = (t, projeto, opcoes) => {
   if (!tem(".captions.json")) passos.push("transcrever");
   if (!tem(".cuts.json")) passos.push("cortar");
   if (!tem(".voz.m4a")) passos.push("audio");
+  if (!tem(".cor.json")) passos.push("cor");
   passos.push("emojis");
   if (config().pexelsKey || process.env.PEXELS_API_KEY) passos.push("broll");
   const proximo = (i) => {
@@ -484,6 +500,7 @@ app.put("/api/projeto", (req, res) => {
 const AJUSTES_DO_PEDIDO = [
   "captionStyle", "captionColor", "highlightColor", "captionY", "wordsWindowMs", "emojis", "keywords",
   "zooms", "cutTransition", "hookText", "hookDurationMs", "behindTexts", "musicVolume", "duckTo", "sfx", "sfxVolume",
+  "cor",
 ];
 
 // Legenda em frases com o tempo do vídeo editado, para a IA saber o que é dito e quando.
@@ -597,7 +614,7 @@ app.put("/api/broll", (req, res) => {
 app.delete("/api/projeto", (req, res) => {
   const id = String(req.query.id || "");
   const base = noPublic(id).replace(/\.[^./\\]+$/, "");
-  for (const suf of ["", ".captions.json", ".cuts.json", ".person.webm", ".broll.json", ".edicao.json", ".voz.m4a", ".settings.json", ".props.json"]) {
+  for (const suf of ["", ".captions.json", ".cuts.json", ".person.webm", ".broll.json", ".edicao.json", ".voz.m4a", ".cor.json", ".settings.json", ".props.json"]) {
     const alvo = suf ? base + suf : noPublic(id);
     fs.rmSync(alvo, { force: true });
   }
