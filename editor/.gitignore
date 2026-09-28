@@ -10,3 +10,4 @@ app/dist/
 app/config.json
 .estado-instalacao.json
 studio.log
+scripts/modelos/
