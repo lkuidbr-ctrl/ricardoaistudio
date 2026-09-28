@@ -27,6 +27,7 @@ const montarProps = (id: string, salvo: Partial<ShortVideoProps>): ShortVideoPro
   behindTexts: [],
   zooms: [],
   broll: [],
+  animacoes: [],
   ...salvo,
 });
 
@@ -244,7 +245,14 @@ export const App: React.FC = () => {
           audio: c.audio ?? "",
           ...(t.tipo === "cor" && c.cor ? { cor: c.cor } : {}),
           ...(t.tipo === "emojis"
-            ? { emojis: true, captions: `${c.captions}`, zooms: c.zooms ?? [], hookText: c.hookText ?? "", hookDurationMs: c.hookDurationMs ?? 2500 }
+            ? {
+                emojis: true,
+                captions: `${c.captions}`,
+                zooms: c.zooms ?? [],
+                hookText: c.hookText ?? "",
+                hookDurationMs: c.hookDurationMs ?? 2500,
+                animacoes: c.animacoes ?? [],
+              }
             : {}),
         });
         // Força o preview a reler as legendas (mesmo nome de arquivo, conteúdo novo).

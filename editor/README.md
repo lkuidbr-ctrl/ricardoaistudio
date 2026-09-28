@@ -33,7 +33,8 @@ preview ao vivo e exporta o MP4.
      (para consertar palavras que a transcrição errou; as duvidosas ficam em amarelo).
    - **Textos**: título-gancho e texto atrás da pessoa. O botão "+ no momento atual"
      usa o ponto onde o vídeo está parado.
-   - **Efeitos**: zoom, transição entre frases (funciona mesmo sem cortar silêncios) e B-roll.
+   - **Efeitos**: cor, animações prontas (setas, check, coração, confete...), zoom, transição
+     entre frases (funciona mesmo sem cortar silêncios) e B-roll.
    - **Áudio**: música com volume automático e efeitos sonoros.
    - **Marca**: cores, logo, @, barra de progresso e tela final. Vale para todos os vídeos
      e liga sozinha quando você preenche.

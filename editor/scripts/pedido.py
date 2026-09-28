@@ -34,6 +34,10 @@ Ajustes que você pode mudar (use exatamente estes nomes e formatos):
   ("rise", "scale", "slide" ou "letters"), "color" "#RRGGBB", "y" (0 a 100), "fontSize" (40 a 600)}.
 - musicVolume (0 a 1), duckTo (0 a 1: volume da música enquanto a pessoa fala), sfx (true/false),
   sfxVolume (0 a 1).
+- animacoes: lista de animações por cima do vídeo: {"tipo" (um de "seta", "circulo", "sublinhado", "check",
+  "xis", "explosao", "coracao", "like", "fogo", "dinheiro", "confete", "brilhos"), "startMs" (tempo do vídeo
+  editado), "durationMs" (300 a 5000), "x" e "y" (centro, em % da tela; y 20 = acima da cabeça), "tamanho"
+  (0.3 a 3, 1 = normal), "cor" "#RRGGBB"}.
 - cor: correção de cor do vídeo, objeto COMPLETO {"brilho" (0.5 a 1.6, 1 = normal), "contraste"
   (0.6 a 1.5), "saturacao" (0 a 2; 0 = preto e branco), "temperatura" (-1 frio a 1 quente, 0 = normal),
   "sombras" (0 a 1: quanto clarear as partes escuras)}.

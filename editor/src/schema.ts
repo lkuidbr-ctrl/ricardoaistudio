@@ -22,6 +22,21 @@ export const corSchema = z.object({
   sombras: z.number().min(0).max(1),
 });
 
+export const tiposAnimacao = [
+  "seta", "circulo", "sublinhado", "check", "xis", "explosao", "coracao", "like", "fogo", "dinheiro", "confete", "brilhos",
+] as const;
+
+// Animação pronta por cima do vídeo (src/effects/Animacoes.tsx). x/y = centro, em % da tela.
+export const animacaoSchema = z.object({
+  tipo: z.enum(tiposAnimacao),
+  startMs: z.number().min(0),
+  durationMs: z.number().min(300),
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+  tamanho: z.number().min(0.3).max(3),
+  cor: zColor(),
+});
+
 export const behindTextSchema = z.object({
   text: z.string(),
   startMs: z.number().min(0),
@@ -74,6 +89,8 @@ export const shortVideoSchema = z.object({
   // Efeito em cada emenda do corte de silêncios (precisa do campo cuts).
   cutTransition: z.enum(cutTransitions),
   broll: z.array(brollSchema),
+  // Animações prontas por cima do vídeo (tempo do vídeo editado).
+  animacoes: z.array(animacaoSchema),
   // Correção de cor do vídeo (scripts/cor.py sugere; dá para ajustar na aba Efeitos).
   cor: corSchema,
   // Áudio da voz melhorado (scripts/audio.py: sem ruído e no volume certo). Vazio = som original.
@@ -95,6 +112,7 @@ export type ShortVideoProps = z.infer<typeof shortVideoSchema>;
 export type BehindText = z.infer<typeof behindTextSchema>;
 export type Zoom = z.infer<typeof zoomSchema>;
 export type Cor = z.infer<typeof corSchema>;
+export type Animacao = z.infer<typeof animacaoSchema>;
 export type Broll = z.infer<typeof brollSchema>;
 export type CutTransition = (typeof cutTransitions)[number];
 export type CaptionStyle = (typeof captionStyles)[number];
