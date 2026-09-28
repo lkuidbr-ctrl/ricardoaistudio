@@ -229,3 +229,4 @@ input[type="range"] { width: 100%; accent-color: var(--destaque); }
 .frase.duvida textarea { border-color: #d4a72c; }
 .faixa-chave { display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #d4a72c; background: rgba(212, 167, 44, .12); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
 .faixa-chave:hover { background: rgba(212, 167, 44, .2); }
+.botao.exportando { background: linear-gradient(90deg, var(--destaque) var(--pct, 0%), rgba(124, 92, 255, .35) var(--pct, 0%)); min-width: 170px; }

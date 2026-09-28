@@ -609,7 +609,14 @@ app.post("/api/exportar", (req, res) => {
   salvarConfiguracoes(projeto, props);
   const nome = semColisao(OUT, path.basename(projeto).replace(/\.[^.]+$/, "") + "-final.mp4");
   const propsArq = path.join(OUT, `.${nome}.props.json`);
-  salvarJson(propsArq, { ...props, video: projeto });
+  // Extras que foram apagados da pasta (B-roll automático, recorte da pessoa, música) não
+  // podem derrubar a exportação: ficam de fora.
+  const extras = {};
+  for (const campo of ["brollFile", "person", "music"]) {
+    const arq = props?.[campo];
+    if (arq && !fs.existsSync(noPublic(arq))) extras[campo] = "";
+  }
+  salvarJson(propsArq, { ...props, ...extras, video: projeto });
   const t = novaTarefa("exportar", projeto, "Exportar vídeo");
   const logArq = path.join(OUT, nome.replace(/\.mp4$/, ".log"));
 

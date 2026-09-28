@@ -421,7 +421,10 @@ export const ModalExportar: React.FC<{ tarefa: Tarefa; fechar: () => void; cance
           <div className="barra grande">
             <i className={pct === 0 ? "indeterminada" : ""} style={{ width: `${Math.max(pct, 3)}%` }} />
           </div>
-          <p className="dica">{pct}% · pode continuar editando. Se fechar o Studio, a exportação termina sozinha e o vídeo fica na pasta editor\out.</p>
+          <p className="dica">
+            {pct}% · pode continuar editando. O botão <b>Exportando...</b>, lá em cima, mostra o andamento; quando terminar, esta janela
+            abre sozinha e o vídeo vai para a pasta <b>Downloads</b>.
+          </p>
           <footer>
             <button className="botao fantasma" onClick={cancelar}>Cancelar exportação</button>
             <button className="botao secundario" onClick={fechar}>Continuar editando</button>
@@ -431,7 +434,7 @@ export const ModalExportar: React.FC<{ tarefa: Tarefa; fechar: () => void; cance
         <>
           <p className="ok-texto grande">✓ Vídeo pronto!</p>
           <video className="video-pronto" src={tarefa.resultado.arquivo} controls />
-          <p className="dica">Também fica salvo na pasta <b>editor\out</b> como <b>{tarefa.resultado.nome}</b>.</p>
+          <p className="dica">Já foi baixado para a pasta <b>Downloads</b> e também fica salvo em <b>editor\out</b> como <b>{tarefa.resultado.nome}</b>.</p>
           <footer>
             <button className="botao fantasma" onClick={fechar}>Fechar</button>
             <a className="botao primario" href={tarefa.resultado.arquivo} download={tarefa.resultado.nome}>

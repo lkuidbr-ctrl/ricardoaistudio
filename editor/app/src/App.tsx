@@ -111,6 +111,18 @@ export const App: React.FC = () => {
       .catch((e) => avisar(`Não consegui falar com o Studio: ${e.message}`, "erro"));
   }, [carregarProjetos, abrirProjeto, avisar]);
 
+  // Recarregou a janela no meio de uma tarefa (ex.: exportação): volta a acompanhar.
+  useEffect(() => {
+    get<Tarefa[]>("/api/tarefas")
+      .then((lista) => {
+        for (const t of lista.filter((x) => x.status === "rodando")) {
+          setTarefas((ts) => ({ ...ts, [t.id]: { ...t, linhas: [] } }));
+          if (t.tipo === "exportar") setExportacao(t.id);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     get<{ temClaude: boolean; claudeOk: boolean }>("/api/config")
       .then((c) => setTemChave(c.temClaude && c.claudeOk))
@@ -167,11 +179,28 @@ export const App: React.FC = () => {
       if (finalizadas.current.has(t.id)) return;
       finalizadas.current.add(t.id);
       if (t.status === "cancelado") return;
+      if (t.tipo === "exportar") {
+        // Mostra o resultado mesmo se a janela de exportação tinha sido fechada.
+        setExportacao(t.id);
+        setModal("exportar");
+        if (t.status === "ok" && t.resultado?.arquivo) {
+          avisar("Vídeo pronto! Ele foi baixado para a pasta Downloads (e também fica em editor\\out).");
+          // Baixa sozinho para a pasta Downloads do Windows.
+          const link = document.createElement("a");
+          link.href = t.resultado.arquivo;
+          link.download = t.resultado.nome ?? "video.mp4";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        } else if (t.status === "erro") {
+          avisar(`Exportar vídeo: ${t.dica ?? "deu erro. Veja os detalhes."}`, "erro");
+        }
+        return;
+      }
       if (t.status === "erro") {
         avisar(`${t.rotulo}: ${t.dica ?? "deu erro. Veja os detalhes no cartão da ferramenta."}`, "erro");
         return;
       }
-      if (t.tipo === "exportar") return; // o modal de exportação mostra o resultado
       if (t.tipo === "atualizar") {
         if (t.resultado?.atualizado) setReiniciando(true);
         return; // "já está na versão mais nova" aparece nas Configurações
@@ -301,8 +330,16 @@ export const App: React.FC = () => {
 
   const cancelar = (id: string) => enviar("POST", `/api/tarefas/${id}/cancelar`).catch(() => {});
 
+  // Exportação em andamento: o botão mostra o andamento e só reabre a janela (não começa outra).
+  const exportando = exportacao && tarefas[exportacao]?.status === "rodando" ? tarefas[exportacao] : null;
+  const pctExportacao = Math.round((exportando?.progresso ?? 0) * 100);
+
   const exportar = async () => {
     if (!props || !atual) return;
+    if (exportando) {
+      setModal("exportar");
+      return;
+    }
     try {
       const { id } = await enviar<{ id: string }>("POST", "/api/exportar", { projeto: atual, props });
       acompanhar(id, "Exportar vídeo", "exportar", atual);
@@ -425,8 +462,14 @@ export const App: React.FC = () => {
         <button className="botao fantasma" onClick={() => setModal("config")} title="Configurações">
           ⚙ Configurações
         </button>
-        <button className="botao primario" onClick={exportar} disabled={!props || !duracao}>
-          Exportar vídeo
+        <button
+          className={`botao primario ${exportando ? "exportando" : ""}`}
+          onClick={exportar}
+          disabled={!exportando && (!props || !duracao)}
+          title={exportando ? "Ver o andamento da exportação" : ""}
+          style={exportando ? ({ "--pct": `${pctExportacao}%` } as React.CSSProperties) : undefined}
+        >
+          {exportando ? `Exportando... ${pctExportacao}%` : "Exportar vídeo"}
         </button>
       </header>
 
