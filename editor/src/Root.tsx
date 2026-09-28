@@ -16,6 +16,7 @@ const exists = async (file: string) => {
 export const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = async ({ props }) => {
   for (const [label, file] of [
     ["video", props.video],
+    ["preview", props.preview],
     ["captions", props.captions],
     ["person", props.person],
     ["cuts", props.cuts],
@@ -73,6 +74,7 @@ export const defaultProps: ShortVideoProps = {
   brollFile: "",
   music: "",
   audio: "",
+  preview: "",
   cor: { brilho: 1, contraste: 1, saturacao: 1, temperatura: 0, sombras: 0 },
   animacoes: [],
   musicVolume: 0.25,

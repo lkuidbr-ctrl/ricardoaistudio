@@ -14,6 +14,7 @@ type Ferramenta = {
   opcoes?: React.ReactNode;
   valores?: () => Record<string, unknown>;
   aviso?: string;
+  acao?: () => void; // abre uma janela em vez de rodar direto
 };
 
 const Cartao: React.FC<{
@@ -88,7 +89,8 @@ export const Ferramentas: React.FC<{
   cancelar: (id: string) => void;
   ia: Ia;
   setIa: (v: Ia) => void;
-}> = ({ arquivos, tarefas, iniciar, cancelar, ia, setIa }) => {
+  abrirRecorte: () => void;
+}> = ({ arquivos, tarefas, iniciar, cancelar, ia, setIa, abrirRecorte }) => {
   const [maxSilencio, setMaxSilencio] = useState(1500);
   const [quantos, setQuantos] = useState(3);
   const [vertical, setVertical] = useState(false);
@@ -168,6 +170,13 @@ export const Ferramentas: React.FC<{
 
   const derivados: Ferramenta[] = [
     {
+      id: "recortar-trecho",
+      icone: "✂",
+      titulo: "Recortar trecho",
+      descricao: "Para vídeos longos: escolha início e fim do trecho que interessa. Cria um vídeo novo.",
+      acao: abrirRecorte,
+    },
+    {
       id: "clipes",
       icone: "📚",
       titulo: "Gerar clipes",
@@ -217,7 +226,7 @@ export const Ferramentas: React.FC<{
       f={f}
       tarefa={ultima(f.id)}
       bloqueado={Boolean(f.precisaLegenda && !arquivos.captions)}
-      iniciar={() => iniciar(f.id, f.valores?.() ?? {})}
+      iniciar={() => (f.acao ? f.acao() : iniciar(f.id, f.valores?.() ?? {}))}
       cancelar={cancelar}
     />
   );
