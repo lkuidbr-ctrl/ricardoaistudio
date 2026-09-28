@@ -9,11 +9,12 @@ export const Glitch: React.FC<{ intensity: number; seed: string | number; childr
   children,
 }) => {
   const id = useId().replace(/:/g, "");
-  if (intensity <= 0.001) return <>{children}</>;
-
+  // A estrutura é sempre a mesma (só o filtro liga e desliga): trocar a árvore remontaria o
+  // vídeo e o som que estão dentro, e eles param de tocar no preview.
+  const ativo = intensity > 0.001;
   const split = 28 * intensity;
-  const jitter = (random(`x${seed}`) - 0.5) * 80 * intensity;
-  const skew = (random(`s${seed}`) - 0.5) * 8 * intensity;
+  const jitter = ativo ? (random(`x${seed}`) - 0.5) * 80 * intensity : 0;
+  const skew = ativo ? (random(`s${seed}`) - 0.5) * 8 * intensity : 0;
 
   return (
     <>
@@ -32,8 +33,8 @@ export const Glitch: React.FC<{ intensity: number; seed: string | number; childr
         style={{
           position: "absolute",
           inset: 0,
-          filter: `url(#${id})`,
-          transform: `translateX(${jitter}px) skewX(${skew}deg)`,
+          filter: ativo ? `url(#${id})` : undefined,
+          transform: ativo ? `translateX(${jitter}px) skewX(${skew}deg)` : undefined,
         }}
       >
         {children}

@@ -100,7 +100,6 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
               <CutVideo src={fonte} timeline={timeline} muted={Boolean(props.audio)} />
             </ComCor>
           ) : null}
-          {props.audio ? <CutAudio src={props.audio} timeline={timeline} /> : null}
 
           {props.behindTexts.map((t, i) => (
             <Sequence
@@ -164,6 +163,9 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
           <EndCard brand={brand} />
         </Sequence>
       ) : null}
+
+      {/* Som da voz melhorado fica fora dos efeitos visuais (zoom, transição): nunca é remontado. */}
+      {props.audio ? <CutAudio src={props.audio} timeline={timeline} /> : null}
 
       {props.music ? (
         <Music src={props.music} volume={props.musicVolume} duckTo={props.duckTo} speech={captions ?? []} />

@@ -11,13 +11,15 @@ const neutra = (c: Cor) =>
 // filtro SVG: o mesmo filtro vale no preview e na exportação, sem mexer no arquivo original.
 // Cada canal: saída = contraste·(brilho·ganho·entrada^gama − 0,5) + 0,5.
 export const ComCor: React.FC<{ cor?: Cor; id: string; children: React.ReactNode }> = ({ cor, id, children }) => {
-  if (!cor || neutra(cor)) return <>{children}</>;
-  const gama = 1 - 0.4 * cor.sombras; // < 1 abre as sombras sem estourar o claro
-  const ganho = { r: 1 + 0.08 * cor.temperatura, g: 1, b: 1 - 0.08 * cor.temperatura };
-  const offset = 0.5 * (1 - cor.contraste);
-  const canal = (g: number) => ({ type: "gamma", amplitude: cor.contraste * cor.brilho * g, exponent: gama, offset });
+  // Mesma estrutura sempre (só o filtro liga/desliga): assim o vídeo dentro não é remontado.
+  const c = cor ?? COR_NEUTRA;
+  const ligado = !neutra(c);
+  const gama = 1 - 0.4 * c.sombras; // < 1 abre as sombras sem estourar o claro
+  const ganho = { r: 1 + 0.08 * c.temperatura, g: 1, b: 1 - 0.08 * c.temperatura };
+  const offset = 0.5 * (1 - c.contraste);
+  const canal = (g: number) => ({ type: "gamma", amplitude: c.contraste * c.brilho * g, exponent: gama, offset });
   return (
-    <AbsoluteFill style={{ filter: `url(#${id})` }}>
+    <AbsoluteFill style={{ filter: ligado ? `url(#${id})` : undefined }}>
       <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
         <filter id={id} colorInterpolationFilters="sRGB">
           <feComponentTransfer>
@@ -25,7 +27,7 @@ export const ComCor: React.FC<{ cor?: Cor; id: string; children: React.ReactNode
             <feFuncG {...canal(ganho.g)} />
             <feFuncB {...canal(ganho.b)} />
           </feComponentTransfer>
-          <feColorMatrix type="saturate" values={String(cor.saturacao)} />
+          <feColorMatrix type="saturate" values={String(c.saturacao)} />
         </filter>
       </svg>
       {children}
