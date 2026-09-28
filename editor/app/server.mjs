@@ -472,6 +472,100 @@ app.put("/api/projeto", (req, res) => {
   res.json({ ok: true });
 });
 
+// ------------------------------------------------------------------ Peça para a IA
+// Ajustes que a IA pode mudar pelo pedido em texto (o app confere de novo antes de aplicar).
+const AJUSTES_DO_PEDIDO = [
+  "captionStyle", "captionColor", "highlightColor", "captionY", "wordsWindowMs", "emojis", "keywords",
+  "zooms", "cutTransition", "hookText", "hookDurationMs", "behindTexts", "musicVolume", "duckTo", "sfx", "sfxVolume",
+];
+
+// Legenda em frases com o tempo do vídeo editado, para a IA saber o que é dito e quando.
+const legendaParaIa = (props) => {
+  if (!props.captions || !fs.existsSync(noPublic(props.captions))) return "";
+  const palavras = lerJson(noPublic(props.captions), []);
+  const keep = props.cuts && fs.existsSync(noPublic(props.cuts)) ? lerJson(noPublic(props.cuts), {}).keep : null;
+  const linhas = [];
+  let atual = [];
+  palavras.forEach((w, i) => {
+    atual.push(w);
+    const prox = palavras[i + 1];
+    if (!prox || /[.!?…]$/.test(w.text.trim()) || prox.startMs - w.endMs > 700 || atual.length >= 14) {
+      const t = noVideoCortado(atual[0].startMs, keep) / 1000;
+      linhas.push(`${t.toFixed(1)}: ${atual.map((x) => x.text.trim()).join(" ")}`);
+      atual = [];
+    }
+  });
+  return linhas.join("\n").slice(0, 12000);
+};
+
+// Troca palavras erradas da legenda (palavra inteira, sem ligar para maiúsculas).
+const trocarNaLegenda = (arquivo, trocas) => {
+  const semAcento = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const limpa = (t) => semAcento(t).replace(/[^\p{L}\p{N}]/gu, "");
+  const palavras = lerJson(arquivo, []);
+  let feitas = 0;
+  for (const { de, para } of trocas) {
+    const alvo = String(de || "").trim().split(/\s+/).map(limpa).filter(Boolean);
+    const novas = String(para || "").trim().split(/\s+/).filter(Boolean);
+    if (!alvo.length || !novas.length) continue;
+    for (let i = 0; i + alvo.length <= palavras.length; i++) {
+      if (!alvo.every((a, j) => limpa(palavras[i + j].text) === a)) continue;
+      // Mantém a pontuação do fim do trecho original (vírgula, ponto...).
+      const fim = palavras[i + alvo.length - 1].text.trim().match(/[.,!?…:;]+$/)?.[0] ?? "";
+      const ultima = novas.length - 1;
+      if (novas.length === alvo.length) {
+        novas.forEach((n, j) => (palavras[i + j].text = " " + n + (j === ultima && !/[.,!?…:;]$/.test(n) ? fim : "")));
+      } else {
+        // Número de palavras diferente: junta tudo na primeira e tira as outras.
+        palavras[i].text = " " + novas.join(" ") + (/[.,!?…:;]$/.test(novas[ultima]) ? "" : fim);
+        palavras[i].endMs = palavras[i + alvo.length - 1].endMs;
+        palavras.splice(i + 1, alvo.length - 1);
+      }
+      feitas++;
+    }
+  }
+  if (feitas) salvarJson(arquivo, palavras);
+  return feitas;
+};
+
+app.post("/api/pedido", (req, res) => {
+  const { projeto, pedido = "", props = {}, ia = "claude" } = req.body || {};
+  if (!pedido.trim()) return res.status(400).json({ erro: "Escreva o que você quer mudar." });
+  if (!fs.existsSync(noPublic(projeto))) return res.status(404).json({ erro: "vídeo não encontrado" });
+  const ajustes = Object.fromEntries(AJUSTES_DO_PEDIDO.filter((k) => k in props).map((k) => [k, props[k]]));
+  const entrada = JSON.stringify({ pedido, ajustes, legenda: legendaParaIa(props) });
+  const proc = spawn(pythonExe(), [py("pedido.py"), ...argsIa({ ia })], {
+    cwd: EDITOR,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1", ...envDasChaves() },
+    windowsHide: true,
+  });
+  let saida = "";
+  let erro = "";
+  const limite = setTimeout(() => proc.kill(), 180_000);
+  proc.stdout.on("data", (d) => (saida += d.toString("utf-8")));
+  proc.stderr.on("data", (d) => (erro += d.toString("utf-8")));
+  proc.on("error", (e) => {
+    clearTimeout(limite);
+    if (!res.headersSent) res.status(500).json({ erro: `Não consegui chamar a IA: ${e.message}` });
+  });
+  proc.on("close", (codigo) => {
+    clearTimeout(limite);
+    if (res.headersSent) return;
+    const linhas = saida.trim().split(/\r?\n/);
+    try {
+      if (codigo !== 0) throw new Error();
+      const r = JSON.parse(linhas.pop());
+      const legenda = props.captions && fs.existsSync(noPublic(props.captions)) ? noPublic(props.captions) : null;
+      const trocas = legenda && r.trocas?.length ? trocarNaLegenda(legenda, r.trocas) : 0;
+      res.json({ resposta: r.resposta, mudancas: r.mudancas || {}, trocas });
+    } catch {
+      const motivo = `${erro}\n${saida}`.trim().split(/\r?\n/).filter((l) => l && !/^\s+(File|at) /.test(l)).pop();
+      res.status(500).json({ erro: motivo || "A IA não respondeu." });
+    }
+  });
+  proc.stdin.end(entrada);
+});
+
 // Correção do texto da legenda feita no app.
 app.put("/api/legenda", (req, res) => {
   const id = String(req.query.id || "");

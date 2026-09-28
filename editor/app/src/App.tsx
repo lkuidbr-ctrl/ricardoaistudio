@@ -6,6 +6,7 @@ import { ShortVideo } from "../../src/ShortVideo";
 import { Ajustes } from "./Ajustes";
 import { enviar, get, subir, type Arquivos, type Projeto, type Tarefa } from "./api";
 import { Ferramentas, type Ia } from "./Ferramentas";
+import { PecaIa } from "./PecaIa";
 import { ModalChave, ModalClipes, ModalConfig, ModalExportar, ModalNarrar } from "./Modais";
 
 const FPS = 30;
@@ -245,6 +246,7 @@ export const App: React.FC = () => {
         });
         // Força o preview a reler as legendas (mesmo nome de arquivo, conteúdo novo).
         if (t.tipo === "emojis" || t.tipo === "transcrever") {
+          window.dispatchEvent(new Event("legenda-mudou"));
           const legenda = c.captions ?? "";
           mudar({ captions: "" });
           setTimeout(() => mudar({ captions: legenda }), 50);
@@ -495,6 +497,21 @@ export const App: React.FC = () => {
               <button className="faixa-chave" onClick={() => setModal("chave")}>
                 ⚠ A IA do Claude ainda não está funcionando. <b>Clique aqui para resolver.</b>
               </button>
+            ) : null}
+            {props && atual ? (
+              <PecaIa
+                projeto={atual}
+                props={props}
+                ia={ia}
+                mudar={mudar}
+                avisar={avisar}
+                aoTrocarLegenda={() => {
+                  window.dispatchEvent(new Event("legenda-mudou"));
+                  const legenda = props.captions;
+                  mudar({ captions: "" });
+                  setTimeout(() => mudar({ captions: legenda }), 50);
+                }}
+              />
             ) : null}
             {props ? (
               <Ferramentas
