@@ -37,6 +37,7 @@ export const ModalNarrar: React.FC<{ fechar: () => void; aoIniciar: (id: string)
   const [titulo, setTitulo] = useState("");
   const [texto, setTexto] = useState("");
   const [velocidade, setVelocidade] = useState(1.05);
+  const [genero, setGenero] = useState("masculino");
   const [fundo, setFundo] = useState("");
   const [erro, setErro] = useState("");
   const rodando = tarefas.some((t) => t.status === "rodando");
@@ -66,6 +67,13 @@ export const ModalNarrar: React.FC<{ fechar: () => void; aoIniciar: (id: string)
         </span>
         <input type="range" min={0.8} max={1.4} step={0.05} value={velocidade} onChange={(e) => setVelocidade(Number(e.target.value))} />
       </label>
+      <label className="linha">
+        <span className="rotulo">Voz</span>
+        <select value={genero} onChange={(e) => setGenero(e.target.value)}>
+          <option value="masculino">Masculina</option>
+          <option value="feminino">Feminina</option>
+        </select>
+      </label>
       <div className="linha-form">
         <span className="rotulo">Fundo:</span>
         <span className="dica">{fundo ? fundo.split("/").pop() : "gradiente animado"}</span>
@@ -85,6 +93,7 @@ export const ModalNarrar: React.FC<{ fechar: () => void; aoIniciar: (id: string)
                 titulo: titulo || "roteiro",
                 texto,
                 velocidade,
+                genero,
                 fundo,
               });
               aoIniciar(id);

@@ -27,7 +27,15 @@ from _common import baixar_modelo, ffmpeg_exe, output_path
 from _ia import IaIndisponivel, add_ia_args, pedir_json
 
 KOKORO = "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/"
-VOZES_PADRAO = {"pt": "pm_alex", "en": "am_michael", "es": "em_alex", "fr": "ff_siwis", "it": "im_nicola"}
+# Voz de cada idioma: feminina e masculina (o francês do Kokoro só tem voz feminina).
+VOZES = {
+    "pt": {"feminino": "pf_dora", "masculino": "pm_alex"},
+    "en": {"feminino": "af_heart", "masculino": "am_michael"},
+    "es": {"feminino": "ef_dora", "masculino": "em_alex"},
+    "fr": {"feminino": "ff_siwis", "masculino": "ff_siwis"},
+    "it": {"feminino": "if_sara", "masculino": "im_nicola"},
+}
+VOZES_PADRAO = {idioma: v["masculino"] for idioma, v in VOZES.items()}
 IDIOMA_ESPEAK = {"pt": "pt-br", "en": "en-us", "es": "es", "fr": "fr-fr", "it": "it"}
 NOMES = {"pt": "português do Brasil", "en": "inglês", "es": "espanhol", "fr": "francês", "it": "italiano"}
 MAX_FONEMAS = 500  # o modelo aceita até 510 por vez; frases maiores são divididas
@@ -95,8 +103,44 @@ class Voz:
         return np.concatenate(partes) if partes else np.zeros(0, np.float32)
 
 
-def carregar_voz(idioma: str, nome: str | None = None) -> Voz:
-    nome = nome or VOZES_PADRAO[idioma]
+def genero_da_fala(video: Path) -> str | None:
+    """Voz feminina ou masculina, pelo tom médio da fala (acima de ~165 Hz costuma ser feminina)."""
+    try:
+        from faster_whisper.audio import decode_audio
+        from faster_whisper.vad import VadOptions, get_speech_timestamps
+        audio = decode_audio(str(video))
+    except Exception:
+        return None
+    trechos = get_speech_timestamps(audio, VadOptions(min_silence_duration_ms=200))
+    fala = np.concatenate([audio[t["start"]:t["end"]] for t in trechos]) if trechos else audio
+    # YIN (o método dos afinadores): menos confusão com a oitava de cima ou de baixo.
+    janela, passo = 800, 400  # 50 ms / 25 ms a 16 kHz
+    menor, maior = 16000 // 400, 16000 // 70  # tons de 70 a 400 Hz
+    tons = []
+    energia_min = float(np.percentile(np.abs(fala), 60)) if len(fala) else 0
+    for i in range(0, len(fala) - janela - maior, passo):
+        q = fala[i : i + janela + maior].astype(np.float64)
+        if np.abs(q[:janela]).mean() < energia_min:
+            continue
+        x = q[:janela]
+        dif = np.array([np.sum((x - q[t : t + janela]) ** 2) for t in range(1, maior + 1)])
+        cmnd = dif * np.arange(1, maior + 1) / np.maximum(np.cumsum(dif), 1e-12)
+        abaixo = np.nonzero(cmnd[menor - 1 :] < 0.15)[0]
+        if not len(abaixo):
+            continue
+        t = abaixo[0] + menor - 1
+        while t + 1 < len(cmnd) and cmnd[t + 1] < cmnd[t]:  # desce até o fundo do vale
+            t += 1
+        tons.append(16000 / (t + 1))
+    if len(tons) < 20:
+        return None
+    tom = float(np.median(tons))
+    print(f"(tom médio da voz: {tom:.0f} Hz)")
+    return "feminino" if tom >= 165 else "masculino"
+
+
+def carregar_voz(idioma: str, nome: str | None = None, genero: str | None = None) -> Voz:
+    nome = nome or VOZES[idioma][genero or "masculino"]
     print(f"(voz {nome}; na primeira vez o modelo é baixado)")
     return Voz(idioma, nome)
 
@@ -165,7 +209,7 @@ def narrar(args: argparse.Namespace) -> None:
     texto = args.roteiro.read_text(encoding="utf-8").strip()
     if not texto:
         raise SystemExit("O roteiro está vazio.")
-    voz = carregar_voz(args.idioma, args.voz)
+    voz = carregar_voz(args.idioma, args.voz, None if args.genero == "auto" else args.genero)
     taxa = voz.sample_rate
 
     blocos = [silencio(0.3, taxa)]
@@ -217,7 +261,8 @@ INSTRUCOES_TRADUCAO = """Você traduz vídeos curtos (Reels/TikTok) para dublage
 Traduza cada frase abaixo para {idioma}, com linguagem natural e falada, do jeito que um
 criador de conteúdo nativo diria. Mantenha o tamanho parecido com o original (a dublagem
 precisa caber no mesmo tempo); se precisar, encurte sem perder o sentido.
-Números, nomes e marcas continuam iguais. Responda uma tradução por índice."""
+Números, nomes e marcas continuam iguais. Responda uma tradução para CADA índice da lista, sem
+pular nenhum e sem juntar frases (mesmo as curtinhas, como "É isso." ou "Olha só.")."""
 
 SCHEMA_TRADUCAO = {
     "type": "object",
@@ -261,9 +306,27 @@ def dublar(args: argparse.Namespace) -> None:
         resposta = pedir_json(args, INSTRUCOES_TRADUCAO.format(idioma=NOMES[args.idioma]), texto, SCHEMA_TRADUCAO)
     except IaIndisponivel as e:
         raise SystemExit(f"A dublagem precisa de IA para traduzir, mas {str(e)[0].lower()}{str(e)[1:]}")
-    traducao = {t["indice"]: t["texto"].strip() for t in resposta["traducoes"]}
+    traducao = {t["indice"]: t["texto"].strip() for t in resposta["traducoes"] if 0 <= t["indice"] < len(fr)}
 
-    voz = carregar_voz(args.idioma, args.voz)
+    # Frase que a IA deixou sem tradução ficaria muda: pede de novo só as que faltaram.
+    faltando = [i for i in range(len(fr)) if not traducao.get(i)]
+    if faltando:
+        print(f"(faltou traduzir {len(faltando)} frase(s); pedindo de novo)")
+        texto2 = "\n".join(f"{i}: {fr[i]['texto']}" for i in faltando)
+        try:
+            r2 = pedir_json(args, INSTRUCOES_TRADUCAO.format(idioma=NOMES[args.idioma]), texto2, SCHEMA_TRADUCAO)
+            traducao.update({t["indice"]: t["texto"].strip() for t in r2["traducoes"] if t["indice"] in faltando})
+        except IaIndisponivel:
+            pass
+        ainda = [i for i in faltando if not traducao.get(i)]
+        if ainda:
+            print(f"AVISO: {len(ainda)} frase(s) ficaram sem tradução e sem voz: " + "; ".join(fr[i]["texto"][:40] for i in ainda))
+
+    genero = None if args.genero == "auto" else args.genero
+    if not args.voz and not genero:
+        genero = genero_da_fala(args.video) or "masculino"
+        print(f"(voz {'feminina' if genero == 'feminino' else 'masculina'}, igual à de quem fala no vídeo)")
+    voz = carregar_voz(args.idioma, args.voz, genero)
     taxa = voz.sample_rate
     voz.preparar([t for t in traducao.values() if t])
     total = duracao_video(args.video)
@@ -343,6 +406,8 @@ def main() -> None:
 
     for p in (n, d):
         p.add_argument("--voz", help="nome de uma voz do Kokoro, ex.: pf_dora (feminina, português)")
+        p.add_argument("--genero", choices=["auto", "feminino", "masculino"], default="auto",
+                       help="voz feminina ou masculina (auto: na dublagem, igual à de quem fala; na narração, masculina)")
         p.add_argument("--velocidade", type=float, default=1.0, help="1.1 = 10%% mais rápido")
         p.add_argument("--sem-legenda", action="store_true", help="não gera as legendas no final")
 
