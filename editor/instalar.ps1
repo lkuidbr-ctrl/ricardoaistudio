@@ -265,40 +265,9 @@ try {
         Saida { & $venvPy -m pip cache purge } | Out-Null
     }
 
-    # ---------------------------------------------------------------- ant (login do Claude)
-    Titulo '5/6  Login no Claude e atualizações'
-    $pastaAnt = Join-Path $env:LOCALAPPDATA 'Programs\ant'
-    if (-not (Get-Command ant -ErrorAction SilentlyContinue)) {
-        $arq = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
-        $url = $null
-        try {
-            $release = Invoke-RestMethod 'https://api.github.com/repos/anthropics/anthropic-cli/releases/latest' -Headers @{ 'User-Agent' = 'ricardoaistudio-instalador' }
-            $url = ($release.assets | Where-Object { $_.name -like "*_windows_$arq.zip" } | Select-Object -First 1).browser_download_url
-        } catch {
-            $url = $null  # sem acesso à API do GitHub: usa a versão fixa abaixo
-        }
-        if (-not $url) {
-            $url = "https://github.com/anthropics/anthropic-cli/releases/download/v1.35.0/ant_1.35.0_windows_$arq.zip"
-        }
-        $zip = Join-Path $env:TEMP 'ant-windows.zip'
-        $tmp = Join-Path $env:TEMP 'ant-windows'
-        Write-Host "    Baixando $url"
-        Invoke-WebRequest $url -OutFile $zip -UseBasicParsing
-        if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
-        Expand-Archive $zip -DestinationPath $tmp -Force
-        $antExe = Get-ChildItem $tmp -Recurse -Filter 'ant.exe' | Select-Object -First 1
-        if (-not $antExe) { throw 'Não achei o ant.exe dentro do arquivo baixado.' }
-        New-Item -ItemType Directory -Force -Path $pastaAnt | Out-Null
-        Copy-Item $antExe.FullName (Join-Path $pastaAnt 'ant.exe') -Force
-        Remove-Item $zip, $tmp -Recurse -Force -ErrorAction SilentlyContinue
-
-        $pathUsuario = [Environment]::GetEnvironmentVariable('Path', 'User')
-        if (($pathUsuario -split ';') -notcontains $pastaAnt) {
-            [Environment]::SetEnvironmentVariable('Path', ($pathUsuario.TrimEnd(';') + ';' + $pastaAnt), 'User')
-        }
-        Atualizar-Path
-    }
-    Ok "ant $(& ant --version)"
+    # ---------------------------------------------------------------- atualizações e atalhos
+    # (O Claude entra só pela chave da API, colada no app: não há mais login pelo navegador.)
+    Titulo '5/6  Atualizações e atalho'
 
     # Git: usado pelo botão "Buscar atualização" do app (baixa só o que mudou).
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -333,19 +302,6 @@ try {
         Write-Host ''
         Write-Host '  Atualização concluída! Abrindo o Studio de novo...' -ForegroundColor Green
         exit 0
-    }
-
-    if ([Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User') -or [Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'Machine')) {
-        Aviso 'Existe uma ANTHROPIC_API_KEY no seu Windows: ela passa na frente do login.'
-        Aviso 'Para usar o login, apague essa variável em "Editar as variáveis de ambiente".'
-    }
-    Write-Host ''
-    & ant auth status
-    Write-Host ''
-    $resposta = Read-Host '    Fazer login no Claude agora? Abre o navegador. (S/n)'
-    if ($resposta -notmatch '^[nN]') {
-        & ant auth login
-        if ($LASTEXITCODE -ne 0) { Aviso 'O login não terminou. Depois, rode "ant auth login" no Terminal do Editor.' }
     }
 
     # ---------------------------------------------------------------- Pexels + atalhos

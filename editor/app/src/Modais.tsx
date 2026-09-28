@@ -165,7 +165,6 @@ export const ModalConfig: React.FC<{
   const [salvo, setSalvo] = useState(false);
   const [chaveClaude, setChaveClaude] = useState("");
   const [teste, setTeste] = useState<{ ok: boolean; motivo?: string; aviso?: string } | "testando" | null>(null);
-  const [mostrarLogin, setMostrarLogin] = useState(false);
   const temPexels = Boolean(cfg?.temPexels);
 
   const atualizar = () => {
@@ -309,29 +308,6 @@ export const ModalConfig: React.FC<{
             <option value="claude-haiku-4-5">Haiku 4.5 (mais barato; cerca de 1/5 do custo)</option>
           </select>
         </label>
-        {!cfg?.temClaude ? (
-          <>
-            <button className="link pequeno" onClick={() => setMostrarLogin((v) => !v)}>
-              {mostrarLogin ? "Esconder" : "Prefere entrar com login em vez de chave?"}
-            </button>
-            {mostrarLogin ? (
-              <div style={{ marginTop: 8 }}>
-                <button
-                  className="botao secundario pequeno"
-                  disabled={tarefaLogin?.status === "rodando"}
-                  onClick={async () => {
-                    const { id } = await enviar<{ id: string }>("POST", "/api/claude/login");
-                    aoLogin(id);
-                  }}
-                >
-                  {tarefaLogin?.status === "rodando" ? "Aguardando o navegador..." : "Entrar no Claude"}
-                </button>
-                <pre className="log">{claude ? claude.texto || "(sem resposta)" : "Verificando..."}</pre>
-                {tarefaLogin && tarefaLogin.linhas.length ? <pre className="log">{tarefaLogin.linhas.slice(-8).join("\n")}</pre> : null}
-              </div>
-            ) : null}
-          </>
-        ) : null}
       </section>
 
 
