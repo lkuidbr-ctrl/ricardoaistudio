@@ -750,6 +750,76 @@ app.post("/api/tarefas", (req, res) => {
   res.json({ id: t.id });
 });
 
+// ------------------------------------------------------------------ Meus vídeos (exportados)
+const AJUSTES_EXPORTADOS = path.join(OUT, ".ajustes");
+const exportadoSeguro = (nome) => {
+  const n = path.basename(String(nome || ""));
+  if (!n.toLowerCase().endsWith(".mp4") || !fs.existsSync(path.join(OUT, n))) throw new Error("vídeo não encontrado");
+  return n;
+};
+// Projeto de onde veio o vídeo: pelos ajustes guardados ou, nos antigos, pelo nome ("x-final-2.mp4" -> "x.*").
+const projetoDoExportado = (nome) => {
+  const ajustes = lerJson(path.join(AJUSTES_EXPORTADOS, `${nome}.json`), null);
+  if (ajustes?.video && fs.existsSync(noPublic(ajustes.video))) return ajustes.video;
+  const base = nome.replace(/-final(-\d+)?\.mp4$/i, "");
+  return listarProjetos().find((p) => p.nome.replace(/\.[^.]+$/, "") === base)?.id ?? null;
+};
+
+app.get("/api/exportados", (_req, res) => {
+  const lista = fs.existsSync(OUT)
+    ? fs.readdirSync(OUT).filter((n) => n.toLowerCase().endsWith(".mp4") && !n.startsWith("."))
+    : [];
+  res.json(
+    lista
+      .map((nome) => {
+        const st = fs.statSync(path.join(OUT, nome));
+        return { nome, url: `/out/${encodeURIComponent(nome)}`, tamanho: st.size, data: st.mtimeMs, projeto: projetoDoExportado(nome) };
+      })
+      .sort((a, b) => b.data - a.data),
+  );
+});
+
+// Volta ao projeto com os ajustes exatos daquele vídeo (quando foram guardados).
+app.post("/api/exportados/editar", (req, res) => {
+  try {
+    const nome = exportadoSeguro(req.body?.nome);
+    const projeto = projetoDoExportado(nome);
+    if (!projeto) return res.status(404).json({ erro: "O vídeo original deste arquivo não está mais no Studio." });
+    const ajustes = lerJson(path.join(AJUSTES_EXPORTADOS, `${nome}.json`), null);
+    if (ajustes) salvarConfiguracoes(projeto, { ...configuracoesDoProjeto(projeto), ...ajustes, video: projeto });
+    res.json({ projeto, restaurado: Boolean(ajustes) });
+  } catch (e) {
+    res.status(404).json({ erro: e.message });
+  }
+});
+
+app.delete("/api/exportados", (req, res) => {
+  try {
+    const nome = exportadoSeguro(req.query.nome);
+    fs.rmSync(path.join(OUT, nome), { force: true });
+    fs.rmSync(path.join(OUT, nome.replace(/\.mp4$/i, ".log")), { force: true });
+    fs.rmSync(path.join(AJUSTES_EXPORTADOS, `${nome}.json`), { force: true });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(404).json({ erro: e.message });
+  }
+});
+
+// Abre a pasta dos vídeos no Explorador do Windows (com o arquivo selecionado, se vier o nome).
+app.post("/api/exportados/pasta", (req, res) => {
+  fs.mkdirSync(OUT, { recursive: true });
+  let alvo = OUT;
+  try {
+    if (req.body?.nome) alvo = path.join(OUT, exportadoSeguro(req.body.nome));
+  } catch {
+    /* sem o arquivo: abre só a pasta */
+  }
+  if (WIN) spawn("explorer.exe", alvo === OUT ? [OUT] : [`/select,${alvo}`], { detached: true, stdio: "ignore" }).unref();
+  else if (process.platform === "darwin") spawn("open", alvo === OUT ? [OUT] : ["-R", alvo], { detached: true, stdio: "ignore" }).unref();
+  else spawn("xdg-open", [OUT], { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
+  res.json({ ok: true, pasta: OUT });
+});
+
 // Recortar trecho: corta exatamente entre início e fim (refaz só o trecho, em alta qualidade) e cria
 // um vídeo novo. O corte "sem refazer" só começa em quadro-chave, que pode estar segundos antes.
 app.post("/api/recortar", (req, res) => {
@@ -828,7 +898,9 @@ app.post("/api/exportar", (req, res) => {
     if (process.env.REMOTION_BROWSER) args.push(`--browser-executable=${process.env.REMOTION_BROWSER}`);
     rodar(t, process.execPath, args, {
       aoTerminar: () => {
-        fs.rmSync(propsArq, { force: true });
+        // Guarda os ajustes usados, para "Meus vídeos > Editar de novo" voltar exatamente a eles.
+        fs.mkdirSync(AJUSTES_EXPORTADOS, { recursive: true });
+        fs.renameSync(propsArq, path.join(AJUSTES_EXPORTADOS, `${nome}.json`));
         return { arquivo: `/out/${encodeURIComponent(nome)}`, nome };
       },
       aoFalhar: () => {
