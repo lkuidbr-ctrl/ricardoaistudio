@@ -699,7 +699,9 @@ app.post("/api/atualizar", (_req, res) => {
   }
   const antes = versaoAtual();
   const t = novaTarefa("atualizar", null, "Atualizar o Studio");
-  const g = (...args) => ({ exe: "git", args, env: { GIT_TERMINAL_PROMPT: "0" } });
+  // Projeto privado: o Gerenciador de Credenciais do Git abre o navegador para entrar no GitHub
+  // (uma vez só; o Windows guarda). Sem pergunta no terminal escondido, que travaria.
+  const g = (...args) => ({ exe: "git", args, env: { GIT_TERMINAL_PROMPT: "0", GCM_GITHUB_AUTHMODES: "browser", GCM_INTERACTIVE: "always" } });
   const passos = [];
   if (!fs.existsSync(path.join(RAIZ, ".git"))) {
     // Primeira atualização de uma pasta baixada em ZIP: vira uma cópia do repositório.
