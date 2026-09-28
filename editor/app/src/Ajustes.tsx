@@ -144,7 +144,8 @@ const reescrever = (antigas: Palavra[], texto: string, limiteMs: number): Palavr
 const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["mudar"]; ligada: boolean }> = ({ video, arquivo, mudar, ligada }) => {
   const [palavras, setPalavras] = useState<Palavra[] | null>(null);
   const [rascunho, setRascunho] = useState<Record<number, string>>({});
-  const [aberto, setAberto] = useState(false);
+  // Aberto de cara: corrigir a transcrição é o ajuste mais comum.
+  const [aberto, setAberto] = useState(true);
   useEffect(() => {
     if (!aberto) return;
     let vivo = true;
