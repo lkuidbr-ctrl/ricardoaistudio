@@ -128,6 +128,12 @@ export const Ferramentas: React.FC<{
       valores: () => ({ maxSilencio }),
     },
     {
+      id: "cor",
+      icone: "🎨",
+      titulo: "Corrigir cor",
+      descricao: "Acerta brilho, contraste, cores e sombras sozinho. Ajuste fino na aba Efeitos.",
+    },
+    {
       id: "audio",
       icone: "🎧",
       titulo: "Melhorar áudio",
@@ -231,7 +237,7 @@ export const Ferramentas: React.FC<{
           id: "automatico",
           icone: "🪄",
           titulo: "Editar automático",
-          descricao: "A IA faz tudo: legenda, cortes, áudio, destaques, emojis, zooms, título-gancho e B-roll. Depois você só ajusta.",
+          descricao: "A IA faz tudo: legenda, cortes, áudio, cor, destaques, emojis, zooms, título-gancho e B-roll. Depois você só ajusta.",
           feito: arquivos.captions && arquivos.cuts && arquivos.emojis,
         }}
         tarefa={ultima("automatico")}
