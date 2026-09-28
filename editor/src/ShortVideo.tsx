@@ -7,7 +7,7 @@ import { AutoZoom } from "./effects/AutoZoom";
 import { BehindText } from "./effects/BehindText";
 import { Broll } from "./effects/Broll";
 import { CutTransition } from "./effects/CutTransition";
-import { CutVideo } from "./effects/CutVideo";
+import { CutAudio, CutVideo } from "./effects/CutVideo";
 import { HookTitle } from "./effects/HookTitle";
 import { Music, SoundEffects, type SfxEvent } from "./effects/Sound";
 import type { ShortVideoProps } from "./schema";
@@ -87,7 +87,8 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     <AbsoluteFill style={{ backgroundColor: "black" }}>
       <AutoZoom zooms={props.zooms}>
         <CutTransition kind={props.cutTransition} joins={joins}>
-          {props.video ? <CutVideo src={props.video} timeline={timeline} /> : null}
+          {props.video ? <CutVideo src={props.video} timeline={timeline} muted={Boolean(props.audio)} /> : null}
+          {props.audio ? <CutAudio src={props.audio} timeline={timeline} /> : null}
 
           {props.behindTexts.map((t, i) => (
             <Sequence

@@ -1,7 +1,7 @@
 // Conversa com o server.mjs.
 
 export type Projeto = { id: string; nome: string; pasta: string; tamanho: number; modificado: number };
-export type Arquivos = { captions: boolean; cuts: boolean; person: boolean; brollFile: boolean; emojis: boolean };
+export type Arquivos = { captions: boolean; cuts: boolean; person: boolean; brollFile: boolean; emojis: boolean; audio: boolean };
 export type Tarefa = {
   id: string;
   tipo: string;

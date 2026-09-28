@@ -512,13 +512,22 @@ const AbaEfeitos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara }
   </>
 );
 
-const AbaAudio: React.FC<Props> = ({ props, mudar }) => {
+const AbaAudio: React.FC<Props> = ({ props, mudar, arquivos }) => {
   const [musicas, setMusicas] = useState<string[]>([]);
   useEffect(() => {
     get<string[]>("/api/uploads").then((l) => setMusicas(l.filter((x) => /\.(mp3|wav|m4a|aac|ogg)$/i.test(x)))).catch(() => {});
   }, [props.music]);
   return (
     <>
+      {arquivos.audio ? (
+        <Secao titulo="Voz" dica="Áudio melhorado: sem ruído de fundo e no volume certo das redes.">
+          <Alternar
+            rotulo="Usar o áudio melhorado"
+            ligado={Boolean(props.audio)}
+            aoMudar={(v) => mudar({ audio: v ? props.video.replace(/\.[^./]+$/, "") + ".voz.m4a" : "" })}
+          />
+        </Secao>
+      ) : null}
       <Secao titulo="Música de fundo" dica="Toca em loop e abaixa sozinha quando você fala.">
         <div className="linha-form">
           <select value={props.music} onChange={(e) => mudar({ music: e.target.value })}>
