@@ -10,7 +10,7 @@ import { PecaIa } from "./PecaIa";
 import { ModalChave, ModalClipes, ModalConfig, ModalExportar, ModalNarrar } from "./Modais";
 
 const FPS = 30;
-const SEM_ARQUIVOS: Arquivos = { captions: false, cuts: false, person: false, brollFile: false, emojis: false };
+const SEM_ARQUIVOS: Arquivos = { captions: false, cuts: false, person: false, brollFile: false, emojis: false, audio: false };
 
 // Configurações de um vídeo novo: parte do padrão do editor, mas sem os exemplos.
 const montarProps = (id: string, salvo: Partial<ShortVideoProps>): ShortVideoProps => ({
@@ -20,6 +20,7 @@ const montarProps = (id: string, salvo: Partial<ShortVideoProps>): ShortVideoPro
   person: "",
   cuts: "",
   brollFile: "",
+  audio: "",
   hookText: "",
   brand: "",
   music: "",
@@ -167,7 +168,7 @@ export const App: React.FC = () => {
       vivo = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props?.video, props?.cuts, props?.captions, props?.person, props?.brollFile, props?.music, props?.brand]);
+  }, [props?.video, props?.cuts, props?.captions, props?.person, props?.brollFile, props?.music, props?.brand, props?.audio]);
 
   const mudar = useCallback((parcial: Partial<ShortVideoProps>) => setProps((p) => (p ? { ...p, ...parcial } : p)), []);
 
@@ -240,6 +241,7 @@ export const App: React.FC = () => {
           cuts: c.cuts ?? "",
           person: c.person ?? "",
           brollFile: c.brollFile ?? "",
+          audio: c.audio ?? "",
           ...(t.tipo === "emojis"
             ? { emojis: true, captions: `${c.captions}`, zooms: c.zooms ?? [], hookText: c.hookText ?? "", hookDurationMs: c.hookDurationMs ?? 2500 }
             : {}),

@@ -1,5 +1,5 @@
 import React from "react";
-import { OffthreadVideo, Sequence, staticFile } from "remotion";
+import { Audio, OffthreadVideo, Sequence, staticFile } from "remotion";
 import type { Timeline } from "../timeline";
 
 const cover: React.CSSProperties = { width: "100%", height: "100%", objectFit: "cover" };
@@ -24,6 +24,17 @@ export const CutVideo: React.FC<{
           muted={muted}
           style={cover}
         />
+      </Sequence>
+    ))}
+  </>
+);
+
+// Mesmo corte, só com o som (áudio melhorado da voz, no lugar do som do vídeo).
+export const CutAudio: React.FC<{ src: string; timeline: Timeline }> = ({ src, timeline }) => (
+  <>
+    {timeline.segments.map((s) => (
+      <Sequence key={s.outFrom} from={s.outFrom} durationInFrames={s.srcTo - s.srcFrom} premountFor={30}>
+        <Audio src={staticFile(src)} trimBefore={s.srcFrom} trimAfter={s.srcTo} />
       </Sequence>
     ))}
   </>

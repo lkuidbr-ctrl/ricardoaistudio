@@ -127,6 +127,7 @@ const GERADOS = {
   cuts: ".cuts.json",
   person: ".person.webm",
   brollFile: ".broll.json",
+  audio: ".voz.m4a",
 };
 
 const listarProjetos = () => {
@@ -341,6 +342,11 @@ const FERRAMENTAS = {
     args: (v, o) => [py("broll.py"), v, ...argsIa(o)],
     campo: "brollFile",
   },
+  audio: {
+    rotulo: "Melhorar áudio",
+    args: (v) => [py("audio.py"), v],
+    campo: "audio",
+  },
   recortar: {
     rotulo: "Recortar a pessoa",
     args: (v) => [py("segment.py"), v],
@@ -413,6 +419,7 @@ const rodarAutomatico = (t, projeto, opcoes) => {
   const passos = [];
   if (!tem(".captions.json")) passos.push("transcrever");
   if (!tem(".cuts.json")) passos.push("cortar");
+  if (!tem(".voz.m4a")) passos.push("audio");
   passos.push("emojis");
   if (config().pexelsKey || process.env.PEXELS_API_KEY) passos.push("broll");
   const proximo = (i) => {
@@ -590,7 +597,7 @@ app.put("/api/broll", (req, res) => {
 app.delete("/api/projeto", (req, res) => {
   const id = String(req.query.id || "");
   const base = noPublic(id).replace(/\.[^./\\]+$/, "");
-  for (const suf of ["", ".captions.json", ".cuts.json", ".person.webm", ".broll.json", ".edicao.json", ".settings.json", ".props.json"]) {
+  for (const suf of ["", ".captions.json", ".cuts.json", ".person.webm", ".broll.json", ".edicao.json", ".voz.m4a", ".settings.json", ".props.json"]) {
     const alvo = suf ? base + suf : noPublic(id);
     fs.rmSync(alvo, { force: true });
   }
@@ -706,7 +713,7 @@ app.post("/api/exportar", (req, res) => {
   // Extras que foram apagados da pasta (B-roll automático, recorte da pessoa, música) não
   // podem derrubar a exportação: ficam de fora.
   const extras = {};
-  for (const campo of ["brollFile", "person", "music"]) {
+  for (const campo of ["brollFile", "person", "music", "audio"]) {
     const arq = props?.[campo];
     if (arq && !fs.existsSync(noPublic(arq))) extras[campo] = "";
   }

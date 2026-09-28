@@ -20,6 +20,7 @@ export const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = asy
     ["cuts", props.cuts],
     ["brollFile", props.brollFile],
     ["music", props.music],
+    ["audio", props.audio],
     ["brand", props.brand],
   ] as const) {
     if (file && !(await exists(file))) {
@@ -63,6 +64,7 @@ export const defaultProps: ShortVideoProps = {
   broll: [],
   brollFile: "",
   music: "",
+  audio: "",
   musicVolume: 0.25,
   duckTo: 0.3,
   sfx: true,

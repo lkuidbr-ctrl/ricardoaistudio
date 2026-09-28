@@ -65,6 +65,8 @@ export const shortVideoSchema = z.object({
   // Efeito em cada emenda do corte de silêncios (precisa do campo cuts).
   cutTransition: z.enum(cutTransitions),
   broll: z.array(brollSchema),
+  // Áudio da voz melhorado (scripts/audio.py: sem ruído e no volume certo). Vazio = som original.
+  audio: z.string(),
   // Música de fundo (mp3/wav em public/). Vazio = sem música.
   music: z.string(),
   musicVolume: z.number().min(0).max(1),
