@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { AbsoluteFill, Sequence, useVideoConfig } from "remotion";
+import { AbsoluteFill, Freeze, Sequence, useVideoConfig } from "remotion";
 import { useBrand } from "./brand";
 import { Captions } from "./captions/Captions";
 import { BrandOverlay, EndCard } from "./effects/BrandOverlay";
@@ -37,7 +37,9 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
   const autoBroll = useJson<AutoBroll[]>(props.brollFile);
   const brand = useBrand(props.brand);
   const hookFrames = props.hookText ? Math.round((props.hookDurationMs / 1000) * fps) : 0;
-  const ctaFrames = brand ? Math.min(durationInFrames, Math.round((brand.cta.duracaoMs / 1000) * fps)) : 0;
+  // A tela final vem depois do vídeo (a composição já tem esse tempo a mais).
+  const ctaFrames = brand ? Math.min(durationInFrames - 1, Math.round((brand.cta.duracaoMs / 1000) * fps)) : 0;
+  const fimDaFala = durationInFrames - ctaFrames;
   // A cor principal da marca vira a cor de destaque das legendas.
   const captionProps = useMemo(
     () => (brand ? { ...props, highlightColor: brand.corPrincipal } : props),
@@ -46,8 +48,8 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
 
   const timeline = useMemo(
     // Com cortes, a composição já tem a duração editada; sem cortes, é o vídeo inteiro.
-    () => buildTimeline(cuts?.keep ?? null, fps, cuts ? Infinity : durationInFrames),
-    [cuts, fps, durationInFrames],
+    () => buildTimeline(cuts?.keep ?? null, fps, cuts ? Infinity : fimDaFala),
+    [cuts, fps, fimDaFala],
   );
   const captions = useMemo(
     () => (rawCaptions ? remapCaptions(rawCaptions, timeline) : null),
@@ -107,6 +109,15 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
           ) : null}
         </CutTransition>
       </AutoZoom>
+
+      {/* Depois da fala: o último quadro fica parado por baixo da tela final. */}
+      {ctaFrames > 0 && props.video ? (
+        <Sequence from={fimDaFala} durationInFrames={ctaFrames}>
+          <Freeze frame={Math.max(0, timeline.totalFrames - 1)}>
+            <CutVideo src={props.video} timeline={timeline} muted />
+          </Freeze>
+        </Sequence>
+      ) : null}
 
       {broll.map((b, i) => (
         <Sequence

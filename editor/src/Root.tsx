@@ -1,6 +1,7 @@
 import { parseMedia } from "@remotion/media-parser";
 import React from "react";
 import { CalculateMetadataFunction, Composition, staticFile } from "remotion";
+import { brandSchema } from "./brand";
 import { ShortVideo } from "./ShortVideo";
 import { shortVideoSchema, type ShortVideoProps } from "./schema";
 import { buildTimeline, type CutsFile } from "./timeline";
@@ -32,16 +33,23 @@ export const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = asy
   }
   if (!props.video) return { durationInFrames: FPS * 5 };
 
+  // A tela final da marca entra DEPOIS da fala (com o último quadro parado), sem cobrir nada.
+  let finalFrames = 0;
+  if (props.brand) {
+    const marca = brandSchema.safeParse(await fetch(staticFile(props.brand)).then((r) => r.json()).catch(() => null));
+    if (marca.success) finalFrames = Math.round((marca.data.cta.duracaoMs / 1000) * FPS);
+  }
+
   const { durationInSeconds } = await parseMedia({
     src: staticFile(props.video),
     fields: { durationInSeconds: true },
     acknowledgeRemotionLicense: true,
   });
   const sourceFrames = Math.max(1, Math.floor((durationInSeconds ?? 5) * FPS));
-  if (!props.cuts) return { durationInFrames: sourceFrames };
+  if (!props.cuts) return { durationInFrames: sourceFrames + finalFrames };
 
   const cuts: CutsFile = await fetch(staticFile(props.cuts)).then((r) => r.json());
-  return { durationInFrames: buildTimeline(cuts.keep, FPS, sourceFrames).totalFrames };
+  return { durationInFrames: buildTimeline(cuts.keep, FPS, sourceFrames).totalFrames + finalFrames };
 };
 
 export const defaultProps: ShortVideoProps = {
