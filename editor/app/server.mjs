@@ -166,6 +166,10 @@ const configuracoesDoProjeto = (id) => {
   for (const [campo, suf] of Object.entries(GERADOS)) {
     if (cfg[campo] === undefined && fs.existsSync(noPublic(irmao(id, suf)))) cfg[campo] = irmao(id, suf);
   }
+  // Extras que foram apagados da pasta (cópia leve, áudio melhorado...) não podem quebrar o preview.
+  for (const campo of ["preview", "audio", "brollFile", "person"]) {
+    if (cfg[campo] && !fs.existsSync(noPublic(cfg[campo]))) cfg[campo] = "";
+  }
   // A marca vale para todos os vídeos: se existe marca.json e ela não foi desligada
   // ("ativa": false), entra em todo vídeo automaticamente.
   const marca = lerJson(path.join(PUBLIC, "marca.json"), null);
