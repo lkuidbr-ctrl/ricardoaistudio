@@ -192,7 +192,6 @@ export const Ferramentas: React.FC<{
           <option value="es">Espanhol</option>
           <option value="fr">Francês</option>
           <option value="it">Italiano</option>
-          <option value="de">Alemão</option>
         </select>
       ),
       valores: () => ({ idioma }),

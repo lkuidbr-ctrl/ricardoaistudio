@@ -175,41 +175,8 @@ try {
         MarcarFeito 'pip-atualizado' 'sim'
     }
 
-    # Placa NVIDIA só compensa com 4 GB ou mais de memória de vídeo. Placas menores/antigas
-    # (ex.: GTX 750 Ti, 2 GB) rendem pouco e costumam falhar; o processador faz o mesmo
-    # trabalho e ainda economiza ~2 GB de download e de disco.
-    $memoriaNvidia = 0
-    try {
-        # O valor do registro é exato; o AdapterRAM do WMI trava em 4 GB, mas serve de reserva.
-        $chaves = Get-ItemProperty 'HKLM:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*' -ErrorAction SilentlyContinue |
-            Where-Object { "$($_.DriverDesc)" -match 'NVIDIA' }
-        foreach ($c in $chaves) {
-            $q = $c.'HardwareInformation.qwMemorySize'
-            if ($q) { $memoriaNvidia = [Math]::Max($memoriaNvidia, [double]$q) }
-        }
-        if (-not $memoriaNvidia) {
-            Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match 'NVIDIA' } |
-                ForEach-Object { $memoriaNvidia = [Math]::Max($memoriaNvidia, [double]$_.AdapterRAM) }
-        }
-    } catch {
-        $memoriaNvidia = 0  # sem como detectar a placa: usa a versão para processador, que sempre funciona
-    }
-    $gbPlaca = [Math]::Round($memoriaNvidia / 1GB, 1)
-    if ($memoriaNvidia -ge 3.5GB) {
-        Write-Host "    Placa NVIDIA com $gbPlaca GB: instalando o PyTorch com aceleração (download grande, ~2,5 GB)..."
-        $indice = 'https://download.pytorch.org/whl/cu126'
-        $querCuda = $true
-    } else {
-        if ($memoriaNvidia -gt 0) {
-            Write-Host "    Placa NVIDIA com só $gbPlaca GB: vou usar o processador, que rende igual e é mais estável."
-        }
-        Write-Host '    Instalando o PyTorch para processador (~200 MB)...'
-        $indice = 'https://download.pytorch.org/whl/cpu'
-        $querCuda = $false
-    }
-
-    # O PyTorch (e outras IAs) precisam do "Microsoft Visual C++ Redistributable"; sem ele,
-    # o "import torch" falha com erro de DLL.
+    # As IAs locais (Whisper, recorte da pessoa, voz) precisam do "Microsoft Visual C++
+    # Redistributable"; sem ele, dão erro de DLL ao abrir.
     $sistema = Join-Path $env:WINDIR 'System32'
     if (-not (Test-Path (Join-Path $sistema 'vcruntime140_1.dll')) -or -not (Test-Path (Join-Path $sistema 'msvcp140.dll'))) {
         try {
@@ -219,35 +186,13 @@ try {
         }
     }
 
-    # PyTorch: instala se não houver; reinstala se estiver quebrado ou for do tipo errado
-    # (ex.: CUDA numa placa fraca); se já estiver certo, não mexe (economiza minutos).
-    $testeTorch = { & $venvPy -c "import torch, torchvision; print('cuda' if torch.version.cuda else 'cpu')" }
-    $teste = Saida $testeTorch
-    $atual = if ($teste.Codigo -eq 0) { "$($teste.Ultima)".Trim() } else { $null }
-    $instalado = (Saida { & $venvPy -m pip show torch }).Codigo -eq 0
+    # O PyTorch e o Piper não são mais usados (o recorte da pessoa e a voz agora rodam no ONNX,
+    # bem mais leve). Instalações antigas: remove, liberando de 1 a 3 GB de disco.
     $mexeu = $false
-    if (-not $atual -and $instalado) {
-        Write-Host "    O PyTorch está instalado mas não abre ($($teste.Ultima)). Reinstalando..."
-        Rodar 'Reinstalar o PyTorch' { & $venvPy -m pip install --force-reinstall torch torchvision --index-url $indice }
-        $mexeu = $true
-    } elseif (-not $atual) {
-        Rodar 'Instalar o PyTorch' { & $venvPy -m pip install torch torchvision --index-url $indice }
-        $mexeu = $true
-    } elseif (($atual -eq 'cuda') -ne $querCuda) {
-        Write-Host "    Trocando o PyTorch ($atual) pela versão certa para este computador..."
-        Rodar 'Trocar o PyTorch' { & $venvPy -m pip install --force-reinstall --no-deps torch torchvision --index-url $indice }
-        $mexeu = $true
-    } else {
-        Ok "PyTorch ($atual) já instalado"
-    }
-    if ($mexeu) {
-        $teste = Saida $testeTorch
-        if ($teste.Codigo -eq 0) {
-            Ok "PyTorch ($("$($teste.Ultima)".Trim())) funcionando"
-        } else {
-            # Só o "Recortar a pessoa" depende do PyTorch: o resto do Studio segue funcionando.
-            Aviso "O PyTorch não abre: $($teste.Ultima)"
-            Aviso 'O "Recortar a pessoa" não vai funcionar até isso ser resolvido; o resto funciona. Mande um print para o Claude.'
+    foreach ($velho in @('torch', 'piper-tts')) {
+        if ((Saida { & $venvPy -m pip show $velho }).Codigo -eq 0) {
+            Rodar "Remover $velho (não é mais necessário)" { & $venvPy -m pip uninstall -y $velho torchvision }
+            $mexeu = $true
         }
     }
 

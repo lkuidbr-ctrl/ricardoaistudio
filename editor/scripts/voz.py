@@ -1,4 +1,4 @@
-"""Voz por IA (Piper: grátis, roda no seu computador).
+"""Voz por IA (Kokoro: grátis, roda no seu computador, licença Apache-2.0).
 
 Narrar um roteiro (vira um vídeo 9:16 com a narração e as legendas prontas):
     python scripts/voz.py narrar public/roteiro.txt
@@ -8,55 +8,101 @@ Dublar um vídeo seu em outro idioma (tradução pelo Claude, ou --ia ollama):
     python scripts/voz.py dublar public/video.mp4 --idioma en
     python scripts/voz.py dublar public/video.mp4 --idioma es --ia ollama --manter-fundo 0.15
 
-Na primeira vez, cada voz é baixada (~60 MB) para scripts/modelos/vozes/.
-Vozes disponíveis: https://rhasspy.github.io/piper-samples/ (use --voz pt_BR-cadu-medium, etc.)
+Na primeira vez, o modelo de voz (~90 MB) é baixado para scripts/modelos/.
+Vozes: pm_alex, pm_santa, pf_dora (português); am_michael, af_heart (inglês); em_alex,
+ef_dora (espanhol); ff_siwis (francês); im_nicola, if_sara (italiano). Use --voz.
 """
 
 import argparse
 import json
 import re
 import subprocess
+import sys
 import wave
 from pathlib import Path
 
 import numpy as np
 
-from _common import ffmpeg_exe, output_path
+from _common import baixar_modelo, ffmpeg_exe, output_path
 from _ia import IaIndisponivel, add_ia_args, pedir_json
 
-PASTA_VOZES = Path(__file__).resolve().parent / "modelos" / "vozes"
-VOZES_PADRAO = {
-    "pt": "pt_BR-faber-medium",
-    "en": "en_US-ryan-medium",
-    "es": "es_MX-ald-medium",
-    "fr": "fr_FR-tom-medium",
-    "it": "it_IT-paola-medium",
-    "de": "de_DE-thorsten-medium",
-}
-NOMES = {"pt": "português do Brasil", "en": "inglês", "es": "espanhol", "fr": "francês", "it": "italiano", "de": "alemão"}
+KOKORO = "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/"
+VOZES_PADRAO = {"pt": "pm_alex", "en": "am_michael", "es": "em_alex", "fr": "ff_siwis", "it": "im_nicola"}
+IDIOMA_ESPEAK = {"pt": "pt-br", "en": "en-us", "es": "es", "fr": "fr-fr", "it": "it"}
+NOMES = {"pt": "português do Brasil", "en": "inglês", "es": "espanhol", "fr": "francês", "it": "italiano"}
+MAX_FONEMAS = 500  # o modelo aceita até 510 por vez; frases maiores são divididas
 
 
 # ---------- voz ----------
 
-def carregar_voz(nome: str):
-    from piper import PiperVoice
+class Voz:
+    """Kokoro rodando no ONNX Runtime (processador)."""
 
-    modelo = PASTA_VOZES / f"{nome}.onnx"
-    if not modelo.exists():
-        from piper.download_voices import download_voice
+    sample_rate = 24000
 
-        print(f"Baixando a voz {nome} (uma vez só)...")
-        PASTA_VOZES.mkdir(parents=True, exist_ok=True)
-        download_voice(nome, PASTA_VOZES)
-    return PiperVoice.load(str(modelo))
+    def __init__(self, idioma: str, nome: str):
+        import onnxruntime as ort
+
+        modelo = baixar_modelo(KOKORO + "onnx/model_quantized.onnx", "kokoro.onnx")
+        vocab = baixar_modelo(KOKORO + "tokenizer.json", "kokoro-tokenizer.json")
+        estilo = baixar_modelo(KOKORO + f"voices/{nome}.bin", f"kokoro-{nome}.bin")
+        self.sessao = ort.InferenceSession(str(modelo), providers=["CPUExecutionProvider"])
+        self.vocab = json.loads(vocab.read_text(encoding="utf-8"))["model"]["vocab"]
+        self.estilo = np.fromfile(estilo, dtype=np.float32).reshape(-1, 1, 256)
+        self.idioma = idioma
+        self.fonemas: dict[str, str] = {}
+
+    def preparar(self, frases: list[str]) -> None:
+        """Converte as frases em fonemas de uma vez (o espeak-ng roda num programa à parte,
+        o scripts/fonemas.py, por causa da licença GPL dele)."""
+        novas = [f for f in dict.fromkeys(frases) if f not in self.fonemas]
+        if not novas:
+            return
+        r = subprocess.run(
+            [sys.executable, str(Path(__file__).with_name("fonemas.py")), "--idioma", IDIOMA_ESPEAK[self.idioma]],
+            input=json.dumps(novas, ensure_ascii=False).encode("utf-8"),
+            capture_output=True,
+        )
+        if r.returncode != 0:
+            raise SystemExit("Não consegui preparar a pronúncia: " + r.stderr.decode("utf-8", "replace")[-400:])
+        self.fonemas.update(zip(novas, json.loads(r.stdout.decode("utf-8"))))
+
+    def _pedaco(self, fonemas: str, velocidade: float) -> np.ndarray:
+        tokens = [self.vocab[c] for c in fonemas if c in self.vocab]
+        if not tokens:
+            return np.zeros(0, np.float32)
+        entrada = {
+            "input_ids": np.array([[0, *tokens, 0]], dtype=np.int64),
+            "style": self.estilo[min(len(tokens), len(self.estilo)) - 1],
+            "speed": np.array([velocidade], dtype=np.float32),
+        }
+        return np.asarray(self.sessao.run(None, entrada)[0], dtype=np.float32).ravel()
+
+    def falar(self, texto: str, velocidade: float = 1.0) -> np.ndarray:
+        self.preparar([texto])
+        fon = " ".join(self.fonemas[texto].split())
+        # Frase longa: divide nos espaços em pedaços que o modelo aceita.
+        pedacos, atual = [], ""
+        for palavra in fon.split(" "):
+            if atual and len(atual) + 1 + len(palavra) > MAX_FONEMAS:
+                pedacos.append(atual)
+                atual = palavra
+            else:
+                atual = f"{atual} {palavra}".strip()
+        if atual:
+            pedacos.append(atual)
+        partes = [self._pedaco(p, min(2.0, max(0.5, velocidade))) for p in pedacos]
+        return np.concatenate(partes) if partes else np.zeros(0, np.float32)
 
 
-def falar(voz, texto: str, velocidade: float = 1.0) -> np.ndarray:
-    from piper import SynthesisConfig
+def carregar_voz(idioma: str, nome: str | None = None) -> Voz:
+    nome = nome or VOZES_PADRAO[idioma]
+    print(f"(voz {nome}; na primeira vez o modelo é baixado)")
+    return Voz(idioma, nome)
 
-    cfg = SynthesisConfig(length_scale=1 / velocidade)
-    partes = [c.audio_float_array for c in voz.synthesize(texto, cfg)]
-    return np.concatenate(partes) if partes else np.zeros(0, np.float32)
+
+def falar(voz: Voz, texto: str, velocidade: float = 1.0) -> np.ndarray:
+    return voz.falar(texto, velocidade)
 
 
 def salvar_wav(audio: np.ndarray, taxa: int, destino: Path) -> None:
@@ -119,11 +165,12 @@ def narrar(args: argparse.Namespace) -> None:
     texto = args.roteiro.read_text(encoding="utf-8").strip()
     if not texto:
         raise SystemExit("O roteiro está vazio.")
-    voz = carregar_voz(args.voz or VOZES_PADRAO[args.idioma])
-    taxa = voz.config.sample_rate
+    voz = carregar_voz(args.idioma, args.voz)
+    taxa = voz.sample_rate
 
     blocos = [silencio(0.3, taxa)]
     paragrafos = [p for p in re.split(r"\n\s*\n", texto) if p.strip()]
+    voz.preparar([f for p in paragrafos for f in re.split(r"(?<=[.!?…])\s+", " ".join(p.split())) if f])
     for i, paragrafo in enumerate(paragrafos):
         frases = [f for f in re.split(r"(?<=[.!?…])\s+", " ".join(paragrafo.split())) if f]
         for frase in frases:
@@ -216,8 +263,9 @@ def dublar(args: argparse.Namespace) -> None:
         raise SystemExit(f"A dublagem precisa de IA para traduzir, mas {str(e)[0].lower()}{str(e)[1:]}")
     traducao = {t["indice"]: t["texto"].strip() for t in resposta["traducoes"]}
 
-    voz = carregar_voz(args.voz or VOZES_PADRAO[args.idioma])
-    taxa = voz.config.sample_rate
+    voz = carregar_voz(args.idioma, args.voz)
+    taxa = voz.sample_rate
+    voz.preparar([t for t in traducao.values() if t])
     total = duracao_video(args.video)
     faixa = np.zeros(int((total + 1) * taxa), np.float32)
 
@@ -294,7 +342,7 @@ def main() -> None:
     add_ia_args(d)
 
     for p in (n, d):
-        p.add_argument("--voz", help="nome de uma voz do Piper, ex.: pt_BR-cadu-medium")
+        p.add_argument("--voz", help="nome de uma voz do Kokoro, ex.: pf_dora (feminina, português)")
         p.add_argument("--velocidade", type=float, default=1.0, help="1.1 = 10%% mais rápido")
         p.add_argument("--sem-legenda", action="store_true", help="não gera as legendas no final")
 

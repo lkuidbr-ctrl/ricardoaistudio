@@ -68,8 +68,8 @@ Premiere.
 | Peça do Studio | Licença | Para vender |
 |---|---|---|
 | Remotion (motor de vídeo) | Própria | Grátis para pessoa física e empresas de até 3 funcionários. Proíbe vender uma versão modificada do Remotion. **Antes de vender, confirmar com a Remotion** se o Studio precisa de licença de empresa. |
-| Robust Video Matting (recortar a pessoa) | **GPL-3.0** | Problema. Trocar por uma alternativa livre para uso comercial: MediaPipe Selfie Segmentation (Apache-2.0), BiRefNet (MIT) ou MODNet (Apache-2.0). |
-| Piper (voz por IA, versão 1.3+) | **GPL-3.0** (mudou para o repositório piper1-gpl) | Problema. Trocar pelo **Kokoro** (Apache-2.0, tem vozes em português do Brasil e soa mais natural). Conferir a parte de fonética (espeak-ng também é GPL; rodar como programa separado). |
+| Robust Video Matting (recortar a pessoa) | **GPL-3.0** | **Resolvido (28/09):** trocado pelo MODNet (Apache-2.0). |
+| Piper (voz por IA, versão 1.3+) | **GPL-3.0** (mudou para o repositório piper1-gpl) | **Resolvido (28/09):** trocado pelo **Kokoro** (Apache-2.0). A pronúncia (espeak-ng/phonemizer, GPL-3.0) fica isolada no `scripts/fonemas.py`, programa separado e GPL-3.0. Vale confirmar com um advogado antes de vender. |
 | faster-whisper (legendas) | MIT | OK |
 | FFmpeg (via Remotion) | LGPL | OK do jeito que é usado (programa separado) |
 | SDK do Claude | MIT | OK |

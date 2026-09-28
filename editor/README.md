@@ -40,7 +40,7 @@ Outras opções:
 - **Narrar roteiro**, no topo: cria um vídeo a partir de um texto, com voz por IA.
 - **Gerar clipes**: corta uma live ou um podcast em vários shorts.
 - **Converter para vertical**: transforma um vídeo deitado em 9:16.
-- **Dublar**: dubla o vídeo em inglês, espanhol, francês, italiano ou alemão.
+- **Dublar**: dubla o vídeo em inglês, espanhol, francês ou italiano.
 
 Em **Configurações** você cola a **chave da API do Claude** (com o botão "Testar", que
 confere se ela funciona e se tem créditos), escolhe o modelo (Opus, Sonnet ou Haiku, do melhor
@@ -69,8 +69,8 @@ camada 2  TEXTO GIGANTE            <- fica escondido atrás da pessoa
 camada 1  vídeo original
 ```
 
-O `scripts/segment.py` usa o **Robust Video Matting** para recortar a pessoa em todos
-os quadros. O recorte é colocado por cima do texto, então o texto parece estar atrás dela.
+O `scripts/segment.py` usa o **MODNet** (licença Apache-2.0, roda no processador) para
+recortar a pessoa em todos os quadros. O recorte é colocado por cima do texto, então o texto parece estar atrás dela.
 
 ## Instalação (uma vez só)
 
@@ -80,10 +80,8 @@ os quadros. O recorte é colocado por cima do texto, então o texto parece estar
 2. Dê dois cliques em **`instalar-windows.bat`**, na pasta principal do projeto.
    - Se aparecer "O Windows protegeu o computador", clique em **Mais informações →
      Executar assim mesmo**. O aviso aparece porque o arquivo veio da internet.
-3. Espere de 10 a 20 minutos. Ele instala sozinho o Node.js, o Python, o editor, as IAs
-   (com aceleração se você tiver placa NVIDIA) e a ferramenta de login do Claude.
-   No fim, abre o navegador para você entrar na conta do Claude e pede a chave do Pexels
-   (opcional).
+3. Espere de 5 a 15 minutos. Ele instala sozinho o Node.js, o Python, o editor e as IAs
+   locais. No fim, pede a chave do Pexels (opcional). A chave do Claude você cola no app.
 4. Pronto: aparece o atalho **Ricardo AI Studio** na Área de Trabalho e no Menu Iniciar.
    Ele abre o app na própria janela.
 
@@ -93,10 +91,8 @@ atualização**. Ele baixa só o que mudou, instala só o que precisa e reabre s
 sua conta, porque o projeto é privado. O instalador também pode ser rodado de novo: ele
 anota o que já instalou e pula o que não mudou.
 
-**Placa de vídeo:** o instalador só usa a placa NVIDIA se ela tiver 4 GB ou mais de memória.
-Placas menores ou antigas (como a GTX 750 Ti) rendem pouco e costumam dar erro; nesse caso
-o processador faz o trabalho. Se a placa falhar no meio de uma tarefa, o Studio continua
-sozinho no processador.
+**Placa de vídeo:** não é necessária. Todas as IAs locais (legenda, recorte da pessoa, voz)
+rodam no processador, com modelos leves.
 
 ### Mac / Linux (ou Windows manual)
 
@@ -133,8 +129,6 @@ O uso é cobrado na conta/workspace que você escolheu no login: um vídeo de 1 
 poucos centavos de dólar. Para gastar ainda menos, use `--modelo claude-haiku-4-5` em
 qualquer script. Sem internet ou sem login? Use `--ia ollama` ou `--ia dicionario`.
 
-> Sem placa NVIDIA, dá para instalar o PyTorch mais leve (só CPU):
-> `pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu`
 
 ## Fluxo para cada vídeo
 
@@ -237,8 +231,8 @@ Com `--ia dicionario` ele usa uma heurística embutida, que é grátis, mas esco
 
 ## Voz por IA: narração e dublagem
 
-Usa o **Piper**, uma voz neural gratuita que roda no seu computador. Na primeira vez, cada
-voz é baixada (~60 MB).
+Usa o **Kokoro** (licença Apache-2.0), uma voz neural gratuita que roda no seu computador.
+Na primeira vez, o modelo é baixado (~90 MB).
 
 **Narrar um roteiro** (vídeo sem gravar a voz):
 ```bash
@@ -250,7 +244,7 @@ Gera `public/roteiro.mp4` e as legendas. As legendas usam o texto exato do rotei
 tempos medidos pelo Whisper, então nomes e palavras estrangeiras saem certos. Separe
 parágrafos com uma linha em branco para ter pausas maiores.
 
-**Dublar um vídeo seu** em inglês, espanhol, francês, italiano ou alemão:
+**Dublar um vídeo seu** em inglês, espanhol, francês ou italiano:
 ```bash
 python scripts/voz.py dublar public/video.mp4 --idioma en                # traduz com o Claude (padrão)
 python scripts/voz.py dublar public/video.mp4 --idioma es --ia ollama --manter-fundo 0.15
@@ -258,8 +252,9 @@ python scripts/voz.py dublar public/video.mp4 --idioma es --ia ollama --manter-f
 Cada frase é traduzida e falada no mesmo momento da original. Se a tradução ficar mais longa,
 a voz acelera até 1,4x para caber. `--manter-fundo` deixa o áudio original baixinho por
 baixo. Gera `video.en.mp4` com as legendas no novo idioma.
-Troque a voz com `--voz` (por exemplo `pt_BR-cadu-medium`); ouça as opções em
-[rhasspy.github.io/piper-samples](https://rhasspy.github.io/piper-samples/).
+Troque a voz com `--voz`: `pm_alex`, `pm_santa` ou `pf_dora` (feminina) em português;
+`am_michael` ou `af_heart` em inglês; `em_alex` ou `ef_dora` em espanhol; `ff_siwis` em
+francês; `im_nicola` ou `if_sara` em italiano.
 A voz é uma voz pronta, não a sua. Clonar a sua voz exige um serviço pago, como o ElevenLabs.
 
 ## Ajustes rápidos
@@ -316,17 +311,19 @@ scripts/
   transcribe.py         Whisper local -> legendas com tempo por palavra
   clips.py              vídeo longo -> vários clipes com título-gancho
   render_all.py         renderiza todos os .props.json de uma pasta
-  voz.py                narração de roteiro e dublagem (Piper)
+  voz.py                narração de roteiro e dublagem (Kokoro)
+  fonemas.py            pronúncia para a voz (espeak-ng; GPL-3.0, roda como programa à parte)
   cut.py                silêncios e "éé" -> trechos que ficam (video.cuts.json)
   enrich.py             destaques e emojis (Claude, Ollama ou dicionário)
   broll.py              B-roll automático com clipes grátis do Pexels
   _ia.py                chamadas de IA compartilhadas (Claude via login OAuth / Ollama)
   gerar_sfx.py          sintetiza os efeitos sonoros de public/sfx/ (sem direito autoral)
-  segment.py            Robust Video Matting -> pessoa com fundo transparente
+  segment.py            MODNet -> pessoa com fundo transparente
 ```
 
 ## Licenças
 
 - O Remotion é gratuito para uso individual (veja remotion.dev/license).
-- Whisper, Robust Video Matting, o detector de rostos YuNet (MIT), o Piper e as fontes (OFL) são gratuitos.
-  Cada voz do Piper tem a própria licença (veja o arquivo `.onnx.json` ou a página da voz).
+- Whisper (MIT), MODNet (Apache-2.0), o detector de rostos YuNet (MIT), o Kokoro (Apache-2.0) e as
+  fontes (OFL) são gratuitos e permitem uso comercial. O espeak-ng e o phonemizer (GPL-3.0) são
+  usados só pelo `scripts/fonemas.py`, um programa à parte.
