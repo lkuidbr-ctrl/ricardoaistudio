@@ -7,7 +7,7 @@ import { Ajustes } from "./Ajustes";
 import { enviar, get, subir, type Arquivos, type Projeto, type Tarefa } from "./api";
 import { Ferramentas, type Ia } from "./Ferramentas";
 import { PecaIa } from "./PecaIa";
-import { ModalChave, ModalClipes, ModalConfig, ModalExportar, ModalNarrar, ModalRecortar } from "./Modais";
+import { ModalChave, ModalClipes, ModalConfig, ModalExportar, ModalNarrar, ModalRecortar, ModalVideos } from "./Modais";
 
 const FPS = 30;
 const SEM_ARQUIVOS: Arquivos = { captions: false, cuts: false, person: false, brollFile: false, emojis: false, audio: false };
@@ -58,7 +58,7 @@ export const App: React.FC = () => {
   const [erroPreview, setErroPreview] = useState("");
   const [tarefas, setTarefas] = useState<Record<string, Tarefa>>({});
   const [ia, setIaEstado] = useState<Ia>(() => lerLocal("ia-escolhida", "claude") as Ia);
-  const [modal, setModal] = useState<null | "narrar" | "config" | "exportar" | "chave" | "recortar">(null);
+  const [modal, setModal] = useState<null | "narrar" | "config" | "exportar" | "chave" | "recortar" | "videos">(null);
   // Tem chave do Claude salva? (null = ainda não sei)
   const [temChave, setTemChave] = useState<boolean | null>(null);
   // Vídeo esperando a chave para a IA editar.
@@ -474,6 +474,9 @@ export const App: React.FC = () => {
         </button>
 
         <div className="espaco" />
+        <button className="botao fantasma" onClick={() => setModal("videos")} title="Os vídeos que você já exportou">
+          🎬 Meus vídeos
+        </button>
         <button className="botao fantasma" onClick={() => setModal("config")} title="Configurações">
           ⚙ Configurações
         </button>
@@ -633,6 +636,17 @@ export const App: React.FC = () => {
           aoAtualizar={(id) => acompanhar(id, "Atualizar o Studio", "atualizar", null)}
           aoMudarChave={setTemChave}
           tarefaAtualizar={Object.values(tarefas).filter((t) => t.tipo === "atualizar").pop()}
+        />
+      ) : null}
+      {modal === "videos" ? (
+        <ModalVideos
+          fechar={() => setModal(null)}
+          editar={async (projeto, restaurado) => {
+            setModal(null);
+            await carregarProjetos();
+            await abrirProjeto(projeto);
+            avisar(restaurado ? "Pronto: o vídeo abriu com os ajustes que ele tinha. Mude o que quiser e exporte de novo." : "Pronto: o vídeo original abriu. Mude o que quiser e exporte de novo.");
+          }}
         />
       ) : null}
       {modal === "recortar" && atual && props ? (

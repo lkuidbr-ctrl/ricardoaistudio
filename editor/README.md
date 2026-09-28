@@ -43,6 +43,8 @@ preview ao vivo e exporta o MP4.
    mesmo assim falhar, o erro fica em `editor\out\<nome>.log`.
 
 Outras opções:
+- **Meus vídeos**, no topo: todos os vídeos exportados, para assistir, baixar, apagar, abrir a
+  pasta ou **Editar de novo** (abre o vídeo original com os ajustes usados naquele vídeo).
 - **Recortar trecho**: num vídeo longo (live, podcast), marque início e fim; o trecho vira um
   vídeo novo e a IA já edita ele.
 - **Preview leve**: vídeos grandes (1080p, 4K) ganham uma cópia pequena só para o preview,

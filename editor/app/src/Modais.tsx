@@ -536,6 +536,80 @@ export const ModalRecortar: React.FC<{ projeto: string; fonte: string; fechar: (
   );
 };
 
+type Exportado = { nome: string; url: string; tamanho: number; data: number; projeto: string | null };
+
+// Meus vídeos: tudo o que já foi exportado, para assistir, baixar, apagar ou editar de novo.
+export const ModalVideos: React.FC<{ fechar: () => void; editar: (projeto: string, restaurado: boolean) => void }> = ({
+  fechar,
+  editar,
+}) => {
+  const [lista, setLista] = useState<Exportado[] | null>(null);
+  const [erro, setErro] = useState("");
+  const carregar = () => get<Exportado[]>("/api/exportados").then(setLista).catch((e) => setErro((e as Error).message));
+  useEffect(() => {
+    carregar();
+  }, []);
+  const mb = (b: number) => `${(b / 1024 / 1024).toFixed(1)} MB`;
+  const quando = (ms: number) => new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <Modal titulo="Meus vídeos" fechar={fechar} largo>
+      <div className="linha-form" style={{ justifyContent: "space-between" }}>
+        <p className="dica" style={{ margin: 0 }}>
+          Todos os vídeos que você exportou. Eles ficam na pasta <b>editor\out</b>.
+        </p>
+        <button className="botao secundario pequeno" onClick={() => enviar("POST", "/api/exportados/pasta", {}).catch(() => {})}>
+          📂 Abrir a pasta
+        </button>
+      </div>
+      {erro ? <p className="erro">{erro}</p> : null}
+      {lista && lista.length === 0 ? <p className="vazio-lista">Nenhum vídeo exportado ainda. Clique em "Exportar vídeo" no topo.</p> : null}
+      <div className="videos">
+        {(lista ?? []).map((v) => (
+          <div key={v.nome} className="video-card">
+            <video src={`${v.url}#t=0.5`} controls preload="metadata" />
+            <b title={v.nome}>{v.nome}</b>
+            <small>
+              {quando(v.data)} · {mb(v.tamanho)}
+            </small>
+            <div className="video-acoes">
+              <a className="botao pequeno primario" href={v.url} download={v.nome}>
+                Baixar
+              </a>
+              <button
+                className="botao pequeno secundario"
+                disabled={!v.projeto}
+                title={v.projeto ? "Abre o vídeo original com os ajustes usados neste vídeo" : "O vídeo original não está mais no Studio"}
+                onClick={async () => {
+                  try {
+                    const r = await enviar<{ projeto: string; restaurado: boolean }>("POST", "/api/exportados/editar", { nome: v.nome });
+                    editar(r.projeto, r.restaurado);
+                  } catch (e) {
+                    setErro((e as Error).message);
+                  }
+                }}
+              >
+                Editar de novo
+              </button>
+              <button
+                className="botao pequeno fantasma"
+                title="Apagar este vídeo"
+                onClick={async () => {
+                  if (!window.confirm(`Apagar "${v.nome}"? Isso não pode ser desfeito.`)) return;
+                  await enviar("DELETE", `/api/exportados?nome=${encodeURIComponent(v.nome)}`).catch((e) => setErro((e as Error).message));
+                  carregar();
+                }}
+              >
+                🗑
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+};
+
 export const ModalClipes: React.FC<{
   clipes: NonNullable<NonNullable<Tarefa["resultado"]>["clipes"]>;
   fechar: () => void;
