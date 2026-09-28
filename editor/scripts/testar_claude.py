@@ -6,16 +6,20 @@ imprime um JSON: {"ok": true} ou {"ok": false, "motivo": "..."}.
 
 import json
 
-from _ia import SEM_CREDITOS
+from _ia import SEM_CREDITOS, SEM_WORKSPACE, chamar_claude, precisa_workspace
 
 
 def main() -> None:
     import anthropic
 
     try:
-        client = anthropic.Anthropic()
-        client.messages.create(model="claude-haiku-4-5", max_tokens=1, messages=[{"role": "user", "content": "oi"}])
-        resultado = {"ok": True}
+        _, workspace = chamar_claude(
+            lambda client: client.messages.create(
+                model="claude-haiku-4-5", max_tokens=1, messages=[{"role": "user", "content": "oi"}]
+            )
+        )
+        # Funcionou com o workspace que o Studio achou: ele guarda para os próximos pedidos.
+        resultado = {"ok": True, **({"workspace": workspace} if workspace else {})}
     except (TypeError, anthropic.CredentialsError):
         resultado = {"ok": False, "motivo": "Nenhuma chave configurada. Cole a sua chave da API e salve."}
     except anthropic.AuthenticationError:
@@ -27,6 +31,8 @@ def main() -> None:
     except anthropic.APIStatusError as e:
         if "credit balance" in str(e.message).lower():
             resultado = {"ok": False, "motivo": SEM_CREDITOS[0].upper() + SEM_CREDITOS[1:]}
+        elif precisa_workspace(e):
+            resultado = {"ok": False, "motivo": SEM_WORKSPACE, "pedeWorkspace": True}
         else:
             resultado = {"ok": False, "motivo": f"O Claude respondeu com erro ({e.status_code}): {e.message}"}
     except anthropic.APIConnectionError:

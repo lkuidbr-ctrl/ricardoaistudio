@@ -112,8 +112,8 @@ export const App: React.FC = () => {
   }, [carregarProjetos, abrirProjeto, avisar]);
 
   useEffect(() => {
-    get<{ temClaude: boolean }>("/api/config")
-      .then((c) => setTemChave(c.temClaude))
+    get<{ temClaude: boolean; claudeOk: boolean }>("/api/config")
+      .then((c) => setTemChave(c.temClaude && c.claudeOk))
       .catch(() => {});
   }, []);
 
@@ -444,7 +444,7 @@ export const App: React.FC = () => {
           <aside className="coluna esquerda">
             {temChave === false ? (
               <button className="faixa-chave" onClick={() => setModal("chave")}>
-                ⚠ A IA precisa da sua chave do Claude. <b>Clique para colar.</b>
+                ⚠ A IA do Claude ainda não está funcionando. <b>Clique aqui para resolver.</b>
               </button>
             ) : null}
             {props ? (

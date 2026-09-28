@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import urllib.error
 import urllib.request
 
@@ -16,6 +17,11 @@ SEM_CREDITOS = (
     "a conta da API do Claude está sem créditos. A assinatura do Claude (Pro/Max) não inclui a API: "
     "adicione créditos em platform.claude.com > Billing (US$ 5 rendem centenas de vídeos) ou troque a "
     "Inteligência para \"Sem IA\" ou \"Ollama\"."
+)
+SEM_WORKSPACE = (
+    "Esta chave do Claude pede o ID do workspace. Em Configurações, clique em Salvar e testar "
+    "(o Studio tenta achar sozinho) ou cole o ID do workspace (começa com wrkspc_, fica em "
+    "platform.claude.com > Settings > Workspaces)."
 )
 
 
@@ -72,22 +78,51 @@ def por_ollama(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
         )
 
 
+def precisa_workspace(erro: Exception) -> bool:
+    """Chave da organização (sem workspace): a API pede o ID do workspace em cada pedido."""
+    return "not scoped to a workspace" in str(getattr(erro, "message", erro))
+
+
+def cliente_claude(workspace: str | None = None):
+    """Cliente do Claude. Se a chave for da organização, manda o ID do workspace junto
+    (ANTHROPIC_WORKSPACE_ID, que o Studio guarda depois do teste da chave)."""
+    import anthropic
+
+    ws = workspace or os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    return anthropic.Anthropic(default_headers={"anthropic-workspace-id": ws} if ws else None)
+
+
+def chamar_claude(fazer):
+    """Roda fazer(client). Se a chave pedir o workspace e o Studio tiver achado um
+    (ANTHROPIC_WORKSPACE_ID_SUGERIDO), tenta de novo com ele. Devolve (resposta, workspace usado)."""
+    import anthropic
+
+    try:
+        return fazer(cliente_claude()), None
+    except anthropic.BadRequestError as e:
+        sugerido = os.environ.get("ANTHROPIC_WORKSPACE_ID_SUGERIDO")
+        if not (precisa_workspace(e) and sugerido and not os.environ.get("ANTHROPIC_WORKSPACE_ID")):
+            raise
+        return fazer(cliente_claude(sugerido)), sugerido
+
+
 def por_claude(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
     import anthropic
 
     # Sem chave no código: o SDK usa o login OAuth do `ant auth login` (e renova o token
     # sozinho). Se ANTHROPIC_API_KEY estiver definida, ela tem prioridade sobre o login.
     try:
-        client = anthropic.Anthropic()
-        response = client.beta.messages.create(
-            model=modelo,
-            max_tokens=16000,
-            system=instrucoes,
-            messages=[{"role": "user", "content": texto}],
-            output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
-            # Se o modelo recusar o pedido, a própria API tenta de novo com o modelo reserva recomendado.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
+        response, _ = chamar_claude(
+            lambda client: client.beta.messages.create(
+                model=modelo,
+                max_tokens=16000,
+                system=instrucoes,
+                messages=[{"role": "user", "content": texto}],
+                output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
+                # Se o modelo recusar o pedido, a própria API tenta de novo com o modelo reserva recomendado.
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+            )
         )
     except (TypeError, anthropic.CredentialsError) as e:
         if isinstance(e, TypeError) and "authentication" not in str(e):
@@ -102,6 +137,8 @@ def por_claude(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
     except anthropic.APIStatusError as e:
         if "credit balance" in str(e.message).lower():
             raise IaIndisponivel(SEM_CREDITOS[0].upper() + SEM_CREDITOS[1:])
+        if precisa_workspace(e):
+            raise IaIndisponivel(SEM_WORKSPACE)
         raise IaIndisponivel(f"O Claude deu erro ({e.status_code}): {e.message}")
     except anthropic.APIConnectionError:
         raise IaIndisponivel("Sem conexão com o Claude (verifique a internet).")

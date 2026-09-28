@@ -74,10 +74,33 @@ const config = () => lerJson(CONFIG, {});
 // A chave do Claude tem prioridade sobre o login (ant auth login).
 const envDasChaves = () => {
   const c = config();
+  const sugerido = c.claudeWorkspace ? "" : workspaceDoPerfil();
   return {
     ...(c.pexelsKey ? { PEXELS_API_KEY: c.pexelsKey } : {}),
     ...(c.claudeKey ? { ANTHROPIC_API_KEY: c.claudeKey } : {}),
+    // Chave da organização (sem workspace): a API pede o ID do workspace em cada pedido.
+    ...(c.claudeWorkspace ? { ANTHROPIC_WORKSPACE_ID: c.claudeWorkspace } : {}),
+    ...(sugerido ? { ANTHROPIC_WORKSPACE_ID_SUGERIDO: sugerido } : {}),
   };
+};
+
+// ID do workspace guardado pelo login antigo do Claude (pasta Anthropic do usuário), para a
+// chave da organização funcionar sem ninguém precisar procurar esse ID.
+const workspaceDoPerfil = () => {
+  const pasta = WIN
+    ? path.join(process.env.APPDATA || "", "Anthropic", "configs")
+    : path.join(process.env.HOME || "", ".config", "anthropic", "configs");
+  try {
+    const arquivos = fs.readdirSync(pasta).filter((n) => n.endsWith(".json"));
+    arquivos.sort((a, b) => (b === "default.json") - (a === "default.json"));
+    for (const nome of arquivos) {
+      const achado = fs.readFileSync(path.join(pasta, nome), "utf-8").match(/wrkspc_[A-Za-z0-9]+/);
+      if (achado) return achado[0];
+    }
+  } catch {
+    /* sem pasta de login: nada a sugerir */
+  }
+  return "";
 };
 
 const MODELOS_CLAUDE = new Set(["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"]);
@@ -746,6 +769,9 @@ app.get("/api/config", (_req, res) => {
     temPexels: Boolean(c.pexelsKey || process.env.PEXELS_API_KEY),
     temClaude: Boolean(c.claudeKey),
     claudeFinal: c.claudeKey ? c.claudeKey.slice(-4) : "",
+    claudeWorkspace: c.claudeWorkspace || "",
+    // A chave já passou no teste? (o app só pede a chave de novo se ela falhar)
+    claudeOk: c.claudeOk === true,
     claudeModelo: MODELOS_CLAUDE.has(c.claudeModelo) ? c.claudeModelo : "claude-opus-5",
   });
 });
@@ -753,7 +779,16 @@ app.put("/api/config", (req, res) => {
   const c = config();
   const b = req.body || {};
   if (typeof b.pexelsKey === "string") c.pexelsKey = b.pexelsKey.trim();
-  if (typeof b.claudeKey === "string") c.claudeKey = b.claudeKey.trim();
+  if (typeof b.claudeKey === "string") {
+    c.claudeKey = b.claudeKey.trim();
+    delete c.claudeWorkspace; // chave nova: o teste descobre de novo se precisa de workspace
+    delete c.claudeOk;
+  }
+  if (typeof b.claudeWorkspace === "string") {
+    const ws = b.claudeWorkspace.trim();
+    if (ws) c.claudeWorkspace = ws;
+    else delete c.claudeWorkspace;
+  }
   if (typeof b.claudeModelo === "string" && MODELOS_CLAUDE.has(b.claudeModelo)) c.claudeModelo = b.claudeModelo;
   salvarJson(CONFIG, c);
   res.json({ ok: true });
@@ -770,7 +805,13 @@ app.post("/api/claude/testar", (_req, res) => {
   });
   const linha = (r.stdout || "").trim().split(/\r?\n/).pop() || "";
   try {
-    res.json(JSON.parse(linha));
+    const resultado = JSON.parse(linha);
+    const c = config();
+    c.claudeOk = Boolean(resultado.ok);
+    // Funcionou com o workspace achado no login antigo: guarda para os próximos pedidos.
+    if (resultado.ok && resultado.workspace) c.claudeWorkspace = resultado.workspace;
+    salvarJson(CONFIG, c);
+    res.json(resultado);
   } catch {
     const erro = `${r.stderr || ""}${r.error?.message || ""}`.trim().split(/\r?\n/).pop();
     res.json({ ok: false, motivo: erro || "Não consegui testar (o Python dos scripts não respondeu)." });
