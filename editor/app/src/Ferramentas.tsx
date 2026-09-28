@@ -89,7 +89,7 @@ export const Ferramentas: React.FC<{
   ia: Ia;
   setIa: (v: Ia) => void;
 }> = ({ arquivos, tarefas, iniciar, cancelar, ia, setIa }) => {
-  const [maxSilencio, setMaxSilencio] = useState(350);
+  const [maxSilencio, setMaxSilencio] = useState(1500);
   const [quantos, setQuantos] = useState(3);
   const [vertical, setVertical] = useState(false);
   const [idioma, setIdioma] = useState("en");
@@ -121,8 +121,8 @@ export const Ferramentas: React.FC<{
       precisaLegenda: true,
       opcoes: (
         <label className="mini">
-          Cortar pausas maiores que <b>{(maxSilencio / 1000).toFixed(2)}s</b>
-          <input type="range" min={150} max={1000} step={50} value={maxSilencio} onChange={(e) => setMaxSilencio(Number(e.target.value))} />
+          Cortar pausas maiores que <b>{(maxSilencio / 1000).toFixed(1)}s</b>
+          <input type="range" min={300} max={3000} step={100} value={maxSilencio} onChange={(e) => setMaxSilencio(Number(e.target.value))} />
         </label>
       ),
       valores: () => ({ maxSilencio }),

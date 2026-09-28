@@ -41,11 +41,40 @@ def video_duration_ms(video: Path) -> float | None:
     return frames / fps * 1000 if frames and fps else None
 
 
+def fala_real(video: Path) -> list[tuple[float, float]]:
+    """Onde há voz de verdade no áudio (Silero VAD, que já vem com o faster-whisper).
+    O Whisper costuma marcar o fim das palavras um pouco cedo; com isso o corte não come
+    o finalzinho da fala."""
+    try:
+        from faster_whisper.audio import decode_audio
+        from faster_whisper.vad import VadOptions, get_speech_timestamps
+    except ImportError:
+        return []
+    try:
+        audio = decode_audio(str(video))
+    except Exception:  # vídeo sem áudio ou formato estranho: fica só com as legendas
+        return []
+    opcoes = VadOptions(threshold=0.4, min_silence_duration_ms=150, speech_pad_ms=30)
+    return [(t["start"] / 16, t["end"] / 16) for t in get_speech_timestamps(audio, opcoes)]
+
+
+def ajustar_pela_voz(inicio: float, fim: float, voz: list[tuple[float, float]]) -> tuple[float, float]:
+    """Estica o trecho até onde a voz realmente começa e termina (no máximo 0,4 s antes e 0,8 s depois)."""
+    for a, b in voz:
+        if a <= inicio <= b:
+            inicio = max(a, inicio - 400)
+        if a <= fim <= b or (fim < a <= fim + 150):
+            fim = min(b, fim + 800) if b > fim else fim
+    return inicio, fim
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("video", type=Path)
     parser.add_argument("--max-silence", type=int, default=350, help="pausas maiores que isso (ms) são cortadas")
-    parser.add_argument("--pad", type=int, default=80, help="folga (ms) antes e depois da fala, para não comer sílabas")
+    parser.add_argument("--pad", type=int, default=80, help="folga (ms) antes da fala, para não comer sílabas")
+    parser.add_argument("--pad-depois", type=int, default=150, help="folga (ms) depois da fala (o fim das frases cai mais)")
+    parser.add_argument("--sem-vad", action="store_true", help="usa só as legendas, sem conferir a voz no áudio")
     parser.add_argument("--filler", action="append", default=[], help="palavra extra para cortar (pode repetir)")
     parser.add_argument("--keep-fillers", action="store_true", help="corta só os silêncios")
     args = parser.parse_args()
@@ -75,10 +104,15 @@ def main() -> None:
     if current:
         groups.append(current)
 
+    voz = [] if args.sem_vad else fala_real(args.video)
+    if voz:
+        print(f"(conferindo a voz no áudio: {len(voz)} trechos de fala)")
+
     keep = []
     for g in groups:
-        start = max(0, g[0]["startMs"] - args.pad)
-        end = g[-1]["endMs"] + args.pad
+        start, end = ajustar_pela_voz(g[0]["startMs"], g[-1]["endMs"], voz)
+        start = max(0, start - args.pad)
+        end = end + args.pad_depois
         if duration:
             end = min(end, duration)
         if keep and start <= keep[-1]["endMs"]:

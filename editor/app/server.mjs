@@ -327,7 +327,7 @@ const FERRAMENTAS = {
   },
   cortar: {
     rotulo: "Cortar silêncios",
-    args: (v, o) => [py("cut.py"), v, "--max-silence", String(o.maxSilencio ?? 350)],
+    args: (v, o) => [py("cut.py"), v, "--max-silence", String(o.maxSilencio ?? 1500)],
     campo: "cuts",
   },
   emojis: {

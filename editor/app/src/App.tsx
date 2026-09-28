@@ -220,6 +220,12 @@ export const App: React.FC = () => {
           mudar({ captions: "" });
           setTimeout(() => mudar({ captions: legenda }), 50);
         }
+        // Refez o corte: mesmo nome de arquivo, conteúdo novo. Força o preview a reler.
+        if (t.tipo === "cortar") {
+          const cortes = c.cuts ?? "";
+          mudar({ cuts: "" });
+          setTimeout(() => mudar({ cuts: cortes }), 50);
+        }
       }
     },
     [avisar, carregarProjetos, abrirProjeto, mudar],

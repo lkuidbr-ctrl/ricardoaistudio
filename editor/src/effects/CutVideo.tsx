@@ -13,7 +13,9 @@ export const CutVideo: React.FC<{
 }> = ({ src, timeline, transparent = false, muted = false }) => (
   <>
     {timeline.segments.map((s) => (
-      <Sequence key={s.outFrom} from={s.outFrom} durationInFrames={s.srcTo - s.srcFrom}>
+      // premountFor: no preview, cada trecho já fica carregado e na posição certa 1 s antes de
+      // aparecer. Sem isso o vídeo pisca preto em cada corte enquanto carrega.
+      <Sequence key={s.outFrom} from={s.outFrom} durationInFrames={s.srcTo - s.srcFrom} premountFor={30}>
         <OffthreadVideo
           src={staticFile(src)}
           trimBefore={s.srcFrom}
