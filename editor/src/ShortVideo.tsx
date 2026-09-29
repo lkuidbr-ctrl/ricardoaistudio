@@ -87,7 +87,12 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
   }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.animacoes, props.hookText, joins, captions, broll]);
 
   // No preview usa a cópia leve (se houver); na exportação, sempre o vídeo original.
-  const fonte = !getRemotionEnvironment().isRendering && props.preview ? props.preview : props.video;
+  const renderizando = getRemotionEnvironment().isRendering;
+  const fonte = !renderizando && props.preview ? props.preview : props.video;
+  // Som da fala. No preview ele sai sempre por <Audio> (que o player libera no primeiro clique
+  // e reaproveita): um <video> com som que começa sozinho no meio (cada trecho do corte) pode
+  // ser barrado pelo navegador, e aí o player silencia aquele vídeo de vez.
+  const somDaFala = props.audio || (renderizando ? "" : fonte);
 
   if (cuts === undefined || brand === undefined) return null;
 
@@ -97,7 +102,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
         <CutTransition kind={props.cutTransition} joins={joins}>
           {props.video ? (
             <ComCor cor={props.cor} id="cor-video">
-              <CutVideo src={fonte} timeline={timeline} muted={Boolean(props.audio)} />
+              <CutVideo src={fonte} timeline={timeline} muted={Boolean(somDaFala)} />
             </ComCor>
           ) : null}
 
@@ -165,7 +170,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
       ) : null}
 
       {/* Som da voz melhorado fica fora dos efeitos visuais (zoom, transição): nunca é remontado. */}
-      {props.audio ? <CutAudio src={props.audio} timeline={timeline} /> : null}
+      {somDaFala ? <CutAudio src={somDaFala} timeline={timeline} /> : null}
 
       {props.music ? (
         <Music src={props.music} volume={props.musicVolume} duckTo={props.duckTo} speech={captions ?? []} />

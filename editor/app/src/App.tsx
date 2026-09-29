@@ -439,6 +439,7 @@ export const App: React.FC = () => {
         <div className="marca-app">
           <span className="logo-app">▶</span>
           <b>Ricardo AI Studio</b>
+          <small className="versao" title="Versão do Studio (data · código)">{__VERSAO_STUDIO__}</small>
         </div>
 
         {projetos?.length ? (
@@ -549,6 +550,9 @@ export const App: React.FC = () => {
                   ref={player}
                   component={ShortVideo}
                   inputProps={props}
+                  // Tags de áudio liberadas no primeiro clique e reaproveitadas (fala, música,
+                  // efeitos): o navegador não barra o som dos trechos que começam depois.
+                  numberOfSharedAudioTags={16}
                   durationInFrames={duracao}
                   fps={FPS}
                   compositionWidth={1080}
