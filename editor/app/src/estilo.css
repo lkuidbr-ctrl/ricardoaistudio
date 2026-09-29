@@ -239,3 +239,4 @@ input[type="range"] { width: 100%; accent-color: var(--destaque); }
 .video-card b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .video-card small { color: var(--texto-3); font-size: 12px; }
 .video-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.versao { color: var(--texto-3); font-size: 11px; margin-left: 6px; font-weight: 500; }
