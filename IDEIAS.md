@@ -164,10 +164,12 @@ que é **novo**.
 - Qualquer coisa com **YOLO/Ultralytics** (AGPL).
 
 ### Prioridade sugerida (parte 2)
-1. Efeitos do Remotion Templates (textos, transições, *lower thirds*).
-2. Emojis animados.
-3. Cortes no ritmo da música.
-4. Editar pelo texto.
+1. ~~Efeitos do Remotion Templates (textos, transições, *lower thirds*).~~ **Feito (01/10):** textos
+   animados (nome e cargo, número contando, digitando, notificação), efeitos de cinema e 2 transições.
+2. ~~Emojis animados.~~ **Feito (01/10).**
+3. ~~Cortes no ritmo da música.~~ **Feito (01/10):** Minhas músicas (ex.: Suno), IA escolhe a música,
+   botão Trocar, efeitos na batida e pulso.
+4. ~~Editar pelo texto.~~ **Feito (01/10):** botão Cortar/Voltar em cada frase da aba Legenda.
 5. Dublagem com a voz do próprio Ricardo (Chatterbox), depois de testar.
 6. Linha do tempo.
 
