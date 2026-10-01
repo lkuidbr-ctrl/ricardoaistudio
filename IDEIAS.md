@@ -110,3 +110,72 @@ Premiere.
 3. **Melhorar áudio** (DeepFilterNet) e **cortes mais precisos** (Silero VAD).
 4. **Animações Lottie** para mais motion.
 5. Os itens anteriores: preview leve e "Recortar trecho".
+
+## Pesquisa no GitHub, parte 2 (01/10/2026)
+
+O Studio **já tem** vários itens que outros projetos vendem como novidade: vertical seguindo o
+rosto (`reframe.py`), clipes de vídeo longo (`clips.py`), corte de vícios ("éé", "hã"), legenda
+editável, peça para a IA, cor automática, melhorar áudio, dublagem e animações. Abaixo fica só o
+que é **novo**.
+
+### Vale a pena (licença livre, roda no PC do Ricardo)
+
+1. **Remotion Templates** (github.com/reactvideoeditor/remotion-templates, **MIT**): 81 efeitos
+   prontos feitos para o Remotion, o mesmo motor do Studio. Inclui textos animados (máquina de
+   escrever, quicando, glitch), transições (persiana, íris, wipe), cinema (tremer câmera, Ken
+   Burns, vinheta), contadores, gráficos, *lower thirds* (nome e cargo na parte de baixo) e telas
+   finais. É só copiar e ligar nas opções do Studio. **Melhor custo-benefício da lista.**
+2. **Emojis animados do Google** (Noto Animated Emoji, **CC BY 4.0**, basta citar o Google nos
+   créditos): 400+ emojis animados em Lottie. Os emojis da legenda passam a se mexer (o 🔥
+   pegando fogo, o 😂 rindo). Usa `@remotion/lottie`, que é oficial do Remotion.
+3. **Chatterbox Multilingual** (Resemble AI, **MIT**): voz por IA que **clona a voz** com 10
+   segundos de áudio e fala português, inglês, espanhol... Na dublagem, o vídeo em inglês sairia
+   **com a voz do próprio Ricardo**, não com uma voz de robô. Roda no processador (mais lento que
+   o Kokoro: um vídeo de 1 minuto deve levar alguns minutos). Põe uma marca d'água inaudível no
+   áudio. Precisa testar a qualidade em português antes.
+4. **Batida da música** (librosa, **ISC**, livre): acha as batidas da música de fundo para que os
+   cortes, zooms e flashes caiam **no ritmo**. É o que deixa vídeo de TikTok com cara
+   "profissional".
+5. **Editar pelo texto** (ideia do Descript e do MoRec): apagar uma palavra ou frase na aba
+   Legenda **corta aquele pedaço do vídeo**. O Studio já tem as legendas com tempo, então é mais
+   trabalho de tela que de IA.
+6. **Linha do tempo** (ideias: OpenReel Video, MIT, 5 mil estrelas, "CapCut de código aberto"):
+   faixa embaixo do vídeo mostrando cortes, zooms, b-roll e animações, para arrastar com o mouse.
+   Os componentes prontos (Twick, openvideodev) têm licença que limita a venda; melhor fazer a
+   nossa, simples, inspirada no OpenReel.
+7. **Seguir o rosto melhor** (auto-vertical-reframe, MIT): separa o vídeo por cenas
+   (PySceneDetect, BSD) e escolhe quem está falando em cada uma. **Cuidado:** ele usa YOLO
+   (Ultralytics), que é **AGPL** e não pode ir num programa vendido. Copiar só a ideia, com o
+   MediaPipe (que já é livre).
+
+### Bom, mas o computador atual não aguenta (placa de vídeo com 2 GB)
+
+- **Boca sincronizada na dublagem** (MuseTalk, MIT; LatentSync, Apache): a boca da pessoa mexe
+  conforme o inglês. Pede placa de vídeo de 8 GB ou mais, ou usar um serviço pago na nuvem.
+- **Música gerada por IA** (ACE-Step 1.5, Apache): cria trilha original sem direito autoral. Roda
+  com 4 GB de placa; no processador é muito lento. Pode ser opção para clientes com PC melhor.
+- **Biblioteca de músicas grátis**: não achei nenhuma grátis e segura para uso comercial dentro de
+  um programa (Jamendo tem licenças que variam; Soundstripe/HookSounds são pagas). Por enquanto,
+  continua o usuário colocando a música dele.
+
+### Não usar
+- **Twick** (licença que proíbe revender) e **openvideodev/react-video-editor** (licença paga para
+  empresa de mais de 3 pessoas).
+- Qualquer coisa com **YOLO/Ultralytics** (AGPL).
+
+### Prioridade sugerida (parte 2)
+1. Efeitos do Remotion Templates (textos, transições, *lower thirds*).
+2. Emojis animados.
+3. Cortes no ritmo da música.
+4. Editar pelo texto.
+5. Dublagem com a voz do próprio Ricardo (Chatterbox), depois de testar.
+6. Linha do tempo.
+
+### Duas versões: a do Ricardo e a de venda (decidido em 01/10/2026)
+- **Versão do Ricardo** (só para ele e os clientes dele, nunca distribuída): pode usar peças
+  **GPL/AGPL** (ex.: YOLO/Ultralytics para seguir o rosto, RVM para recortar a pessoa), porque
+  essas licenças só cobram algo de quem **distribui** o programa.
+- **Não pode nem na versão do Ricardo:** peças **"não comercial"** (CC BY-NC, "research only",
+  ex.: F5-TTS, Wav2Lip, RMBG-2.0). Fazer vídeo para cliente que paga **é uso comercial**.
+- **Versão de venda:** só MIT, Apache, BSD, ISC, CC BY e parecidas.
+- Tudo o que for grátis e de licença livre entra **nas duas**.
