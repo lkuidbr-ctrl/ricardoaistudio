@@ -80,7 +80,7 @@ a{color:var(--brand)}
     <span class="tag">Grupo de estudo</span><span class="tag">Atualizado: out/2026</span>
     <h1>API-ficação de sistemas legados<br>e arquitetura MCP</h1>
     <p>Como transformar sistemas fechados (desktop, ERPs antigos, painéis web sem integração) em ferramentas que agentes de IA conseguem usar — com segurança.</p>
-    <p><small>Material: RICARDO IA STUDIO · versão original revisada, ampliada e verificada com a documentação oficial do MCP.</small></p>
+    <p><small>Material: RICARDO IA STUDIO · revisado com a documentação oficial do MCP.</small></p>
   </div>
 </header>
 
@@ -104,20 +104,20 @@ a{color:var(--brand)}
 
 <section id="rotas">
   <h2><span class="n">1.</span>As rotas para sistemas sem API</h2>
-  <p class="lead">O material original trazia três rotas (A, B, C). Mantive as três, corrigi pontos imprecisos e acrescentei duas que faltavam (D e E).</p>
+  <p class="lead">Cinco rotas possíveis, da mais rápida à mais frágil. Cada uma traz quando usar e quais cuidados tomar.</p>
 
   <div class="card">
     <span class="pill ok">Rota A</span> <b>Conexão direta ao banco de dados</b> <small>— a mais rápida</small>
     <p><b>Como funciona:</b> uma camada de API fica na frente do banco (PostgreSQL, MySQL, SQL Server, Oracle) e expõe tabelas/consultas como endpoints REST. Ferramentas como PostgREST, Hasura, Directus ou Prisma geram isso quase automaticamente.</p>
     <p><b>Quando usar:</b> você tem acesso legítimo ao banco e o esquema é estável.</p>
-    <div class="callout warn"><b class="t">⚠ Ajuste em relação ao original</b>O texto chama de “API fantasma” e fala em “leitura e escrita seguras”. Na prática, <b>escrever direto no banco de um sistema legado pula as regras de negócio</b> (validações, triggers, cálculos que só existem na aplicação) e pode corromper dados ou violar o suporte do fornecedor. Regra de ouro: <b>comece só-leitura</b> (usuário com <code>SELECT</code>, de preferência numa réplica) e só libere escrita por procedimentos controlados.</div>
+    <div class="callout warn"><b class="t">⚠ Atenção</b>Essa abordagem é chamada de “API fantasma”, mas cuidado: <b>escrever direto no banco de um sistema legado pula as regras de negócio</b> (validações, triggers, cálculos que só existem na aplicação) e pode corromper dados ou violar o suporte do fornecedor. Regra de ouro: <b>comece só-leitura</b> (usuário com <code>SELECT</code>, de preferência numa réplica) e só libere escrita por procedimentos controlados.</div>
   </div>
 
   <div class="card">
     <span class="pill warn">Rota B</span> <b>Automação de navegador / RPA web</b> <small>— para painéis web fechados</small>
     <p><b>Como funciona:</b> um robô controla um navegador (Playwright, Puppeteer, Selenium) e executa o que um humano faria: login, navegar, extrair dados, preencher formulários. Cada rotina vira um endpoint.</p>
     <p><b>Quando usar:</b> o sistema só existe como site/painel e não há API nem banco acessível.</p>
-    <div class="callout warn"><b class="t">⚠ Ajuste em relação ao original</b>Apify <b>não é</b> um navegador simulado: é uma <i>plataforma</i> para hospedar e agendar esses robôs. Além disso, esta rota é <b>frágil</b> — mudou o layout, quebrou. Cheque também os <b>Termos de Uso</b> do sistema (automatizar pode ser proibido) e a LGPD se houver dado pessoal.</div>
+    <div class="callout warn"><b class="t">⚠ Atenção</b>Apify <b>não é</b> um navegador simulado: é uma <i>plataforma</i> para hospedar e agendar esses robôs. Além disso, esta rota é <b>frágil</b> — mudou o layout, quebrou. Cheque também os <b>Termos de Uso</b> do sistema (automatizar pode ser proibido) e a LGPD se houver dado pessoal.</div>
   </div>
 
   <div class="card">
@@ -128,12 +128,12 @@ a{color:var(--brand)}
   </div>
 
   <div class="card">
-    <span class="pill bad">Rota D · nova</span> <b>RPA de desktop / Computer Use</b>
-    <p>O título do material cita <i>softwares desktop</i>, mas nenhuma rota cobria isso. Para programas Windows sem banco nem web, existem ferramentas de RPA (UiPath, Power Automate Desktop, AutoHotkey, pywinauto) ou agentes com “uso do computador”. É a opção mais lenta e frágil — último recurso.</p>
+    <span class="pill bad">Rota D</span> <b>RPA de desktop / Computer Use</b>
+    <p>E os softwares desktop? Para programas Windows sem banco nem web, existem ferramentas de RPA (UiPath, Power Automate Desktop, AutoHotkey, pywinauto) ou agentes com “uso do computador”. É a opção mais lenta e frágil — último recurso.</p>
   </div>
 
   <div class="card">
-    <span class="pill ok">Rota E · nova</span> <b>Integração oficial ou exportação nativa</b>
+    <span class="pill ok">Rota E</span> <b>Integração oficial ou exportação nativa</b>
     <p>Antes de qualquer gambiarra: o sistema tem API paga, módulo de integração, exportação agendada (CSV/XML), ODBC ou webhook escondido nas configurações? Pergunte ao fornecedor. É a rota mais estável e, muitas vezes, a mais barata.</p>
   </div>
 </section>
@@ -166,13 +166,13 @@ a{color:var(--brand)}
   <div class="flow">
     <div class="step"><div class="num">1</div><b>Sistema legado</b><small>Origem dos dados e das regras de negócio.</small></div>
     <div class="arrow">→</div>
-    <div class="step"><div class="num">2</div><b>API (OpenAPI)</b><small>Camada estruturada e documentada. O original dizia “temporária”; o ideal é que seja <u>permanente e versionada</u>.</small></div>
+    <div class="step"><div class="num">2</div><b>API (OpenAPI)</b><small>Camada estruturada e documentada. O ideal é que seja <u>permanente e versionada</u>, não uma solução provisória.</small></div>
     <div class="arrow">→</div>
     <div class="step"><div class="num">3</div><b>Servidor MCP</b><small>Expõe a API como <i>tools</i> (o “USB-C da IA”).</small></div>
     <div class="arrow">→</div>
     <div class="step"><div class="num">4</div><b>Agente de IA</b><small>Claude Code, Cursor, Cline, Claude Desktop… (são os <i>clientes/hosts</i> MCP).</small></div>
   </div>
-  <div class="callout"><b class="t">Camada que o original esquecia</b>Entre 2 e 3 devem existir <b>autenticação, limites de uso (rate limit), logs/auditoria e permissões por ferramenta</b>. Sem isso, você deu ao agente a chave do sistema inteiro.</div>
+  <div class="callout"><b class="t">Camada que não pode faltar</b>Entre 2 e 3 devem existir <b>autenticação, limites de uso (rate limit), logs/auditoria e permissões por ferramenta</b>. Sem isso, você deu ao agente a chave do sistema inteiro.</div>
 </section>
 
 <section id="combo">
@@ -245,7 +245,7 @@ if __name__ == "__main__":
 </section>
 
 <section id="seguranca">
-  <h2><span class="n">7.</span>Segurança — a parte que o original não tinha</h2>
+  <h2><span class="n">7.</span>Segurança</h2>
   <p class="lead">Ao ligar IA a um sistema real, o risco muda de “resposta errada” para “ação errada”. Principais ameaças (veja <a href="https://cheatsheetseries.owasp.org/cheatsheets/MCP_Security_Cheat_Sheet.html" target="_blank" rel="noopener">OWASP – MCP Security</a>):</p>
   <div class="grid">
     <div class="card"><span class="pill bad">Prompt injection</span><p>Texto malicioso dentro de um dado (e-mail, campo de cliente, PDF) que instrui o agente a fazer algo não autorizado. <b>Trate todo dado vindo do sistema como não confiável.</b></p></div>
@@ -317,7 +317,7 @@ if __name__ == "__main__":
     <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/MCP_Security_Cheat_Sheet.html" target="_blank" rel="noopener">OWASP – MCP Security Cheat Sheet</a></li>
     <li><a href="https://owasp.org/www-community/attacks/MCP_Tool_Poisoning" target="_blank" rel="noopener">OWASP – MCP Tool Poisoning</a></li>
   </ul>
-  <div class="callout"><b class="t">Sobre este material</b>Baseado no documento “Estratégia de API-ficação e Arquitetura MCP” (Ricardo IA Studio, out/2026), revisado com pesquisa em fontes oficiais. Padrões e versões mudam rápido: confirme na documentação antes de implementar.</div>
+  <div class="callout"><b class="t">Sobre este material</b>Material do Ricardo IA Studio (out/2026), revisado com pesquisa em fontes oficiais. Padrões e versões mudam rápido: confirme na documentação antes de implementar.</div>
 </section>
 
 <footer>Ricardo IA Studio · Material de estudo · Pode ser impresso (Ctrl+P) ou compartilhado como arquivo único.</footer>
