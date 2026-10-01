@@ -507,6 +507,8 @@ const aplicarFerramenta = (projeto, f) => {
     return;
   }
   if (!f.campo && !f.extra) return;
+  // O cut.py escreve o .cuts.json do zero: põe de volta as frases tiradas pela aba Legenda.
+  if (f.campo === "cuts") aplicarCortesTexto(projeto);
   const cfg = configuracoesDoProjeto(projeto);
   if (f.campo) cfg[f.campo] = irmao(projeto, GERADOS[f.campo]);
   Object.assign(cfg, f.extra?.() ?? {});
@@ -520,7 +522,8 @@ const rodarAutomatico = (t, projeto, opcoes) => {
   const passos = [];
   if (!tem(".proxy.mp4") && precisaPreviewLeve(noPublic(projeto))) passos.push("preview");
   if (!tem(".captions.json")) passos.push("transcrever");
-  if (!tem(".cuts.json")) passos.push("cortar");
+  // Um .cuts.json feito só pelos cortes da aba Legenda ainda não tem o corte de silêncios.
+  if (!tem(".cuts.json") || lerJson(noPublic(irmao(projeto, ".cuts.json")), {}).soTexto) passos.push("cortar");
   if (!tem(".voz.m4a")) passos.push("audio");
   if (!tem(".cor.json")) passos.push("cor");
   passos.push("emojis");
@@ -803,6 +806,75 @@ app.get("/api/uploads", (_req, res) => {
   const pasta = path.join(PUBLIC, "uploads");
   const itens = fs.existsSync(pasta) ? fs.readdirSync(pasta).map((n) => `uploads/${n}`) : [];
   res.json(itens);
+});
+
+// ------------------------------------------------------------------ cortar pelo texto
+// Frases que você tirou do vídeo pela aba Legenda ficam em <vídeo>.cortes-texto.json (tempo do
+// vídeo original). O .cuts.json guarda o corte de silêncios em "keepOriginal" e, em "keep",
+// o resultado já sem essas frases (é o que o editor usa). Refazer o corte de silêncios mantém
+// as frases tiradas.
+const subtrairTrechos = (keep, tirar) => {
+  let saida = keep.map((k) => ({ ...k }));
+  for (const t of tirar) {
+    saida = saida.flatMap((k) => {
+      if (t.endMs <= k.startMs || t.startMs >= k.endMs) return [k];
+      const partes = [];
+      if (t.startMs > k.startMs) partes.push({ startMs: k.startMs, endMs: t.startMs });
+      if (t.endMs < k.endMs) partes.push({ startMs: t.endMs, endMs: k.endMs });
+      return partes;
+    });
+  }
+  return saida.filter((k) => k.endMs - k.startMs >= 100); // pedacinhos menores que 0,1 s somem
+};
+
+const aplicarCortesTexto = (projeto) => {
+  const removidos = lerJson(noPublic(irmao(projeto, ".cortes-texto.json")), []);
+  const arq = noPublic(irmao(projeto, ".cuts.json"));
+  let cuts = lerJson(arq, null);
+  if (!cuts && !removidos.length) return null;
+  if (!cuts) {
+    // Sem corte de silêncios: o vídeo inteiro, menos as frases tiradas.
+    const duracao = Math.round(Number(ffprobe(noPublic(projeto), ["-show_entries", "format=duration"])) * 1000);
+    if (!duracao) return null;
+    cuts = { keep: [{ startMs: 0, endMs: duracao }], soTexto: true };
+  }
+  const base = cuts.keepOriginal ?? cuts.keep;
+  salvarJson(arq, { ...cuts, keepOriginal: base, keep: subtrairTrechos(base, removidos) });
+  return irmao(projeto, ".cuts.json");
+};
+
+app.get("/api/cortes-texto", (req, res) => {
+  res.json(lerJson(noPublic(irmao(String(req.query.projeto || ""), ".cortes-texto.json")), []));
+});
+
+const mudarCortesTexto = (projeto, res, mudar) => {
+  if (!projeto || !fs.existsSync(noPublic(projeto))) return res.status(404).json({ erro: "vídeo não encontrado" });
+  const arq = noPublic(irmao(projeto, ".cortes-texto.json"));
+  const cfgAntes = configuracoesDoProjeto(projeto);
+  const keepAntes = cfgAntes.cuts ? lerJson(noPublic(cfgAntes.cuts), {}).keep ?? null : null;
+  const lista = mudar(lerJson(arq, [])).sort((a, b) => a.startMs - b.startMs);
+  salvarJson(arq, lista);
+  const cuts = aplicarCortesTexto(projeto);
+  if (cuts) {
+    const cfg = configuracoesDoProjeto(projeto);
+    cfg.cuts = cuts;
+    salvarConfiguracoes(projeto, cfg);
+  }
+  res.json({ lista, cuts, keepAntes, keepDepois: cuts ? lerJson(noPublic(cuts), {}).keep : null });
+};
+
+app.post("/api/cortes-texto", (req, res) => {
+  const { projeto, startMs, endMs, texto } = req.body || {};
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return res.status(400).json({ erro: "trecho inválido" });
+  mudarCortesTexto(String(projeto || ""), res, (lista) => [
+    ...lista.filter((r) => r.startMs !== startMs),
+    { startMs: Math.round(startMs), endMs: Math.round(endMs), texto: String(texto || "").slice(0, 200) },
+  ]);
+});
+
+app.delete("/api/cortes-texto", (req, res) => {
+  const startMs = Number(req.query.startMs);
+  mudarCortesTexto(String(req.query.projeto || ""), res, (lista) => lista.filter((r) => r.startMs !== startMs));
 });
 
 // ------------------------------------------------------------------ Minhas músicas

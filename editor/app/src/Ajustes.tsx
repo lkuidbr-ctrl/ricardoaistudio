@@ -144,7 +144,51 @@ const reescrever = (antigas: Palavra[], texto: string, limiteMs: number): Palavr
   });
 };
 
-const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["mudar"]; ligada: boolean }> = ({ video, arquivo, mudar, ligada }) => {
+// Trechos mantidos do vídeo original (o .cuts.json); null = o vídeo inteiro.
+type Trechos = { startMs: number; endMs: number }[] | null;
+
+// Tempo do vídeo editado -> tempo do vídeo original, e o contrário (como o noVideoCortado do servidor).
+const paraOriginal = (ms: number, keep: Trechos) => {
+  if (!keep?.length) return ms;
+  let antes = 0;
+  for (const k of keep) {
+    const dur = k.endMs - k.startMs;
+    if (ms < antes + dur) return k.startMs + (ms - antes);
+    antes += dur;
+  }
+  return keep[keep.length - 1].endMs + (ms - antes);
+};
+const paraEditado = (ms: number, keep: Trechos) => {
+  if (!keep?.length) return ms;
+  let antes = 0;
+  for (const k of keep) {
+    if (ms < k.startMs) return antes; // caiu num trecho cortado: vai para o próximo
+    if (ms <= k.endMs) return antes + (ms - k.startMs);
+    antes += k.endMs - k.startMs;
+  }
+  return antes;
+};
+
+// Quando uma frase sai (ou volta), zooms, textos e efeitos andam junto com a fala.
+const acompanharCorte = (props: ShortVideoProps, antes: Trechos, depois: Trechos): Partial<ShortVideoProps> => {
+  const t = (ms: number) => Math.round(paraEditado(paraOriginal(ms, antes), depois));
+  return {
+    zooms: props.zooms.map((z) => ({ ...z, atMs: t(z.atMs) })),
+    animacoes: (props.animacoes ?? []).map((a) => ({ ...a, startMs: t(a.startMs) })),
+    cartelas: (props.cartelas ?? []).map((c) => ({ ...c, startMs: t(c.startMs) })),
+    efeitosTela: (props.efeitosTela ?? []).map((e) => ({ ...e, startMs: t(e.startMs) })),
+    behindTexts: props.behindTexts.map((b) => ({ ...b, startMs: t(b.startMs) })),
+    broll: props.broll.map((b) => ({ ...b, startMs: t(b.startMs) })),
+  };
+};
+
+const CorrigirLegenda: React.FC<{ props: ShortVideoProps; arquivo: string; mudar: Props["mudar"]; ligada: boolean }> = ({
+  props,
+  arquivo,
+  mudar,
+  ligada,
+}) => {
+  const video = props.video;
   const [palavras, setPalavras] = useState<Palavra[] | null>(null);
   const [rascunho, setRascunho] = useState<Record<number, string>>({});
   // Aberto de cara: corrigir a transcrição é o ajuste mais comum.
@@ -167,8 +211,41 @@ const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["
     };
   }, [arquivo, aberto, versao]);
 
+  // Frases tiradas do vídeo (tempo do vídeo original).
+  const [cortes, setCortes] = useState<{ startMs: number; endMs: number }[]>([]);
+  const [cortando, setCortando] = useState(false);
+  useEffect(() => {
+    get<{ startMs: number; endMs: number }[]>(`/api/cortes-texto?projeto=${encodeURIComponent(video)}`).then(setCortes).catch(() => {});
+  }, [video, versao]);
+
   const frases = palavras ? emFrases(palavras) : [];
   const textoDe = (f: { inicio: number; fim: number }) => palavras!.slice(f.inicio, f.fim).map((p) => p.text.trim()).join(" ");
+  const trechoDe = (f: { inicio: number; fim: number }) => ({ startMs: palavras![f.inicio].startMs, endMs: palavras![f.fim - 1].endMs });
+  const cortada = (f: { inicio: number; fim: number }) => {
+    const t = trechoDe(f);
+    return cortes.find((c) => c.startMs <= t.startMs && c.endMs >= t.endMs);
+  };
+  // Tira (ou devolve) a frase do vídeo e recarrega o preview com o corte novo.
+  const cortar = async (f: { inicio: number; fim: number }) => {
+    if (cortando) return;
+    setCortando(true);
+    try {
+      const ja = cortada(f);
+      type Resposta = { lista: typeof cortes; cuts: string | null; keepAntes: Trechos; keepDepois: Trechos };
+      const r = ja
+        ? await enviar<Resposta>("DELETE", `/api/cortes-texto?projeto=${encodeURIComponent(video)}&startMs=${ja.startMs}`)
+        : await enviar<Resposta>("POST", "/api/cortes-texto", { projeto: video, ...trechoDe(f), texto: textoDe(f) });
+      setCortes(r.lista);
+      // Sem o corte ligado no editor, o vídeo antes era o inteiro.
+      const antes = props.cuts ? r.keepAntes : null;
+      mudar({ ...acompanharCorte(props, antes, r.keepDepois), cuts: "" });
+      setTimeout(() => mudar({ cuts: r.cuts ?? "" }), 50);
+    } catch {
+      // o aviso de erro já aparece pelo app
+    } finally {
+      setCortando(false);
+    }
+  };
 
   const salvar = async (fi: number) => {
     if (!palavras) return;
@@ -193,7 +270,7 @@ const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["
   return (
     <Secao
       titulo="Corrigir o texto"
-      dica="Se a transcrição errou alguma palavra, corrija aqui. As frases em amarelo são onde a IA ficou em dúvida."
+      dica="Corrija as palavras que a transcrição errou (as frases em amarelo são onde a IA ficou em dúvida). Em ✂️ Cortar, a frase sai do vídeo."
       acao={
         <button type="button" className="botao pequeno secundario" onClick={() => setAberto((v) => !v)}>
           {aberto ? "Fechar" : "Abrir texto"}
@@ -204,11 +281,27 @@ const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["
         <div className="frases">
           {frases.map((f, fi) => {
             const duvida = palavras.slice(f.inicio, f.fim).some((p) => (p.confidence ?? 1) < 0.6);
+            const fora = Boolean(cortada(f));
             return (
-              <label key={f.inicio} className={`frase ${duvida ? "duvida" : ""}`}>
-                <small>{formatarTempo(palavras[f.inicio].startMs)}</small>
+              <label key={f.inicio} className={`frase ${duvida ? "duvida" : ""} ${fora ? "cortada" : ""}`}>
+                <span className="frase-topo">
+                  <small>{fora ? "cortada do vídeo" : formatarTempo(palavras[f.inicio].startMs)}</small>
+                  <button
+                    type="button"
+                    className="botao pequeno fantasma"
+                    disabled={cortando}
+                    title={fora ? "Põe esta frase de volta no vídeo" : "Tira esta frase do vídeo (dá para voltar depois)"}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      cortar(f);
+                    }}
+                  >
+                    {fora ? "↩ Voltar" : "✂️ Cortar"}
+                  </button>
+                </span>
                 <textarea
                   rows={2}
+                  disabled={fora}
                   value={rascunho[f.inicio] ?? textoDe(f)}
                   onChange={(e) => setRascunho((r) => ({ ...r, [f.inicio]: e.target.value }))}
                   onBlur={() => salvar(fi)}
@@ -242,7 +335,7 @@ const AbaLegenda: React.FC<Props> = ({ props, mudar, arquivos }) => {
         />
       )}
       {arquivos.captions ? (
-        <CorrigirLegenda video={props.video} arquivo={props.captions || props.video.replace(/\.[^./]+$/, "") + ".captions.json"} mudar={mudar} ligada={Boolean(props.captions)} />
+        <CorrigirLegenda props={props} arquivo={props.captions || props.video.replace(/\.[^./]+$/, "") + ".captions.json"} mudar={mudar} ligada={Boolean(props.captions)} />
       ) : null}
       <Secao titulo="Estilo">
         <div className="estilos">
