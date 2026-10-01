@@ -1,7 +1,9 @@
 // Coluna direita: todos os ajustes visuais do vídeo, em abas.
 import React, { useEffect, useRef, useState } from "react";
-import type { Animacao, Broll, BehindText, CaptionStyle, ShortVideoProps, Zoom } from "../../src/schema";
+import type { Animacao, Broll, BehindText, CaptionStyle, Cartela, EfeitoTela, ShortVideoProps, Zoom } from "../../src/schema";
 import { COR_ANIMACAO, TIPOS_ANIMACAO } from "../../src/effects/Animacoes";
+import { PADRAO_CARTELA, TIPOS_CARTELA } from "../../src/effects/Cartelas";
+import { DURACAO_EFEITO_TELA, TIPOS_EFEITO_TELA } from "../../src/effects/EfeitosTela";
 import { enviar, formatarTempo, get, type Arquivos } from "./api";
 import { Alternar, Cor, Deslizante, EnviarArquivo, Escolha, Linha, Secao, Texto } from "./campos";
 
@@ -316,6 +318,7 @@ const AbaTextos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara })
           <Deslizante rotulo="Duração" valor={props.hookDurationMs} min={1000} max={8000} passo={250} formato={(v) => `${v / 1000}s`} aoMudar={(v) => mudar({ hookDurationMs: v })} />
         ) : null}
       </Secao>
+      <SecaoCartelas props={props} mudar={mudar} arquivos={arquivos} agoraMs={agoraMs} irPara={irPara} />
       <Secao
         titulo="Texto atrás da pessoa"
         acao={<button className="botao pequeno primario" onClick={() => mudar({ behindTexts: [...props.behindTexts, novo()] })}>+ no momento atual</button>}
@@ -498,12 +501,102 @@ const SecaoAnimacoes: React.FC<Props> = ({ props, mudar, agoraMs, irPara }) => {
   );
 };
 
+const nomeCartela = (tipo: Cartela["tipo"]) => TIPOS_CARTELA.find((t) => t.valor === tipo)?.nome ?? tipo;
+
+const DICA_SUBTEXTO: Record<Cartela["tipo"], [string, string]> = {
+  nome: ["Nome", "Cargo ou profissão"],
+  numero: ["Número (ex.: R$ 10.000, 95%)", "Embaixo do número"],
+  digitando: ["Texto", ""],
+  notificacao: ["Mensagem", "Nome do app"],
+};
+
+const SecaoCartelas: React.FC<Props> = ({ props, mudar, agoraMs, irPara }) => {
+  const itens = props.cartelas ?? [];
+  const nova = (): Cartela => ({ tipo: "nome", startMs: Math.round(agoraMs()), ...PADRAO_CARTELA.nome });
+  return (
+    <Secao
+      titulo="Textos animados"
+      dica="Nome e cargo, número contando, texto digitando, notificação do celular. A IA coloca alguns sozinha."
+      acao={<button className="botao pequeno primario" onClick={() => mudar({ cartelas: [...itens, nova()] })}>+ no momento atual</button>}
+    >
+      <Lista<Cartela>
+        itens={itens}
+        titulo={(c) => `${nomeCartela(c.tipo)}: ${c.texto || "(vazio)"}`}
+        resumo={(c) => `${formatarTempo(c.startMs)} · ${c.durationMs / 1000}s`}
+        inicio={(c) => c.startMs}
+        irPara={irPara}
+        aoMudar={(cartelas) => mudar({ cartelas })}
+        editor={(c, m) => (
+          <>
+            <Escolha
+              rotulo="Tipo"
+              valor={c.tipo}
+              opcoes={TIPOS_CARTELA}
+              aoMudar={(tipo) => {
+                // Troca o tipo mantendo o texto que você já escreveu (o texto de exemplo é trocado).
+                const antes = PADRAO_CARTELA[c.tipo];
+                const { texto, subtexto, ...resto } = PADRAO_CARTELA[tipo];
+                m({
+                  tipo,
+                  ...resto,
+                  ...(!c.texto || c.texto === antes.texto ? { texto } : {}),
+                  ...(!c.subtexto || c.subtexto === antes.subtexto ? { subtexto } : {}),
+                });
+              }}
+            />
+            <Texto rotulo={DICA_SUBTEXTO[c.tipo][0]} valor={c.texto} aoMudar={(texto) => m({ texto })} />
+            {DICA_SUBTEXTO[c.tipo][1] ? (
+              <Texto rotulo={DICA_SUBTEXTO[c.tipo][1]} valor={c.subtexto} aoMudar={(subtexto) => m({ subtexto })} />
+            ) : null}
+            <Tempo rotulo="Começa em" ms={c.startMs} aoMudar={(startMs) => m({ startMs })} agoraMs={agoraMs} />
+            <Deslizante rotulo="Duração" valor={c.durationMs} min={1000} max={8000} passo={250} formato={(v) => `${v / 1000}s`} aoMudar={(durationMs) => m({ durationMs })} />
+            <Deslizante rotulo="Posição (altura)" valor={c.y} min={5} max={95} formato={(v) => `${v}%`} aoMudar={(y) => m({ y })} />
+            <Cor rotulo="Cor" valor={c.cor} aoMudar={(cor) => m({ cor })} />
+          </>
+        )}
+      />
+    </Secao>
+  );
+};
+
+const nomeEfeitoTela = (tipo: EfeitoTela["tipo"]) => TIPOS_EFEITO_TELA.find((t) => t.valor === tipo)?.nome ?? tipo;
+
+const SecaoEfeitosTela: React.FC<Props> = ({ props, mudar, agoraMs, irPara }) => {
+  const itens = props.efeitosTela ?? [];
+  const novo = (): EfeitoTela => ({ tipo: "tremor", startMs: Math.round(agoraMs()), durationMs: DURACAO_EFEITO_TELA.tremor, forca: 1 });
+  return (
+    <Secao
+      titulo="Efeitos de cinema"
+      dica="Câmera tremendo, luz de filme, vinheta e preto e branco, num trecho do vídeo."
+      acao={<button className="botao pequeno primario" onClick={() => mudar({ efeitosTela: [...itens, novo()] })}>+ no momento atual</button>}
+    >
+      <Lista<EfeitoTela>
+        itens={itens}
+        titulo={(e) => nomeEfeitoTela(e.tipo)}
+        resumo={(e) => `${formatarTempo(e.startMs)} · ${e.durationMs / 1000}s`}
+        inicio={(e) => e.startMs}
+        irPara={irPara}
+        aoMudar={(efeitosTela) => mudar({ efeitosTela })}
+        editor={(e, m) => (
+          <>
+            <Escolha rotulo="Efeito" valor={e.tipo} opcoes={TIPOS_EFEITO_TELA} aoMudar={(tipo) => m({ tipo, durationMs: DURACAO_EFEITO_TELA[tipo] })} />
+            <Tempo rotulo="Começa em" ms={e.startMs} aoMudar={(startMs) => m({ startMs })} agoraMs={agoraMs} />
+            <Deslizante rotulo="Duração" valor={e.durationMs} min={300} max={10000} passo={100} formato={(v) => `${v / 1000}s`} aoMudar={(durationMs) => m({ durationMs })} />
+            <Deslizante rotulo="Força" valor={e.forca} min={0.2} max={2} passo={0.1} formato={(v) => `${Math.round(v * 100)}%`} aoMudar={(forca) => m({ forca })} />
+          </>
+        )}
+      />
+    </Secao>
+  );
+};
+
 const AbaEfeitos: React.FC<Props> = (p) => {
   const { props, mudar, arquivos, agoraMs, irPara } = p;
   return (
   <>
     <SecaoCor props={props} mudar={mudar} />
     <SecaoAnimacoes {...p} />
+    <SecaoEfeitosTela {...p} />
     <Secao
       titulo="Zoom"
       dica="Aproxima a câmera num momento de ênfase."
@@ -555,6 +648,8 @@ const AbaEfeitos: React.FC<Props> = (p) => {
           { valor: "flash", nome: "Flash branco" },
           { valor: "whip", nome: "Chicote (whip)" },
           { valor: "glitch", nome: "Glitch" },
+          { valor: "luz", nome: "Luz de filme" },
+          { valor: "tremor", nome: "Tranco (câmera treme)" },
           { valor: "none", nome: "Nenhuma" },
         ]}
         aoMudar={(cutTransition) => mudar({ cutTransition })}

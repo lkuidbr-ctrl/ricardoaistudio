@@ -440,6 +440,14 @@ const novaAnimacao = (tipo, startMs) => ({
   cor: COR_ANIMACAO[tipo] ?? "#FFE600",
 });
 
+// Textos animados e efeitos de cinema: posição e cor padrão de cada tipo (iguais aos do app).
+const PADRAO_CARTELA = {
+  nome: { y: 62, cor: "#FFE600" },
+  numero: { y: 30, cor: "#22C55E" },
+  digitando: { y: 25, cor: "#FFFFFF" },
+  notificacao: { y: 14, cor: "#22C55E" },
+};
+
 const aplicarEdicaoIa = (projeto, cfg) => {
   const arq = noPublic(irmao(projeto, ".edicao.json"));
   const edicao = lerJson(arq, null);
@@ -450,11 +458,27 @@ const aplicarEdicaoIa = (projeto, cfg) => {
   if (!cfg.zooms?.length || mesmoJson(cfg.zooms, antes.zooms)) cfg.zooms = zooms;
   const animacoes = (edicao.animacoes || []).map((a) => novaAnimacao(a.tipo, Math.round(noVideoCortado(a.sourceMs, keep))));
   if (!cfg.animacoes?.length || mesmoJson(cfg.animacoes, antes.animacoes)) cfg.animacoes = animacoes;
+  const cartelas = (edicao.cartelas || [])
+    .filter((c) => PADRAO_CARTELA[c.tipo])
+    .map((c) => ({
+      tipo: c.tipo,
+      texto: c.texto,
+      subtexto: c.subtexto || "",
+      startMs: Math.round(noVideoCortado(c.sourceMs, keep)),
+      durationMs: c.durationMs || 3000,
+      ...PADRAO_CARTELA[c.tipo],
+    }));
+  if (!cfg.cartelas?.length || mesmoJson(cfg.cartelas, antes.cartelas)) cfg.cartelas = cartelas;
+  const efeitosTela = (edicao.efeitos || []).map((e) => {
+    const startMs = Math.round(noVideoCortado(e.sourceMs, keep));
+    return { tipo: e.tipo, startMs, durationMs: Math.max(300, Math.round(noVideoCortado(e.sourceFimMs, keep)) - startMs), forca: 1 };
+  });
+  if (!cfg.efeitosTela?.length || mesmoJson(cfg.efeitosTela, antes.efeitosTela)) cfg.efeitosTela = efeitosTela;
   if (edicao.gancho && (!cfg.hookText || cfg.hookText === antes.gancho)) {
     cfg.hookText = edicao.gancho;
     cfg.hookDurationMs = cfg.hookDurationMs || 2500;
   }
-  salvarJson(arq, { ...edicao, aplicado: { zooms: cfg.zooms, gancho: cfg.hookText, animacoes: cfg.animacoes } });
+  salvarJson(arq, { ...edicao, aplicado: { zooms: cfg.zooms, gancho: cfg.hookText, animacoes: cfg.animacoes, cartelas: cfg.cartelas, efeitosTela: cfg.efeitosTela } });
 };
 
 // O que cada ferramenta muda no projeto quando termina.
@@ -551,7 +575,7 @@ app.put("/api/projeto", (req, res) => {
 const AJUSTES_DO_PEDIDO = [
   "captionStyle", "captionColor", "highlightColor", "captionY", "wordsWindowMs", "emojis", "keywords",
   "zooms", "cutTransition", "hookText", "hookDurationMs", "behindTexts", "musicVolume", "duckTo", "sfx", "sfxVolume",
-  "cor", "animacoes",
+  "cor", "animacoes", "cartelas", "efeitosTela",
 ];
 
 // Legenda em frases com o tempo do vídeo editado, para a IA saber o que é dito e quando.

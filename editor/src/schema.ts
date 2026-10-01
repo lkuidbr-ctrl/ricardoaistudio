@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const captionStyles = ["hormozi", "karaoke", "pop", "neon", "minimal"] as const;
 export const behindAnimations = ["rise", "scale", "slide", "letters"] as const;
-export const cutTransitions = ["none", "zoom", "flash", "whip", "glitch"] as const;
+export const cutTransitions = ["none", "zoom", "flash", "whip", "glitch", "luz", "tremor"] as const;
 export const brollModes = ["full", "pip"] as const;
 export const brollTransitions = ["fade", "slide", "zoom", "glitch"] as const;
 
@@ -35,6 +35,32 @@ export const animacaoSchema = z.object({
   y: z.number().min(0).max(100),
   tamanho: z.number().min(0.3).max(3),
   cor: zColor(),
+});
+
+// Textos animados por cima do vídeo (src/effects/Cartelas.tsx).
+//   nome: nome e cargo na parte de baixo; numero: número que conta até o valor ("R$ 10.000");
+//   digitando: texto aparecendo letra por letra; notificacao: balão de notificação do celular.
+export const tiposCartela = ["nome", "numero", "digitando", "notificacao"] as const;
+export const cartelaSchema = z.object({
+  tipo: z.enum(tiposCartela),
+  texto: z.string(),
+  // Linha de baixo (cargo, legenda do número, nome do app da notificação). Pode ficar vazio.
+  subtexto: z.string(),
+  startMs: z.number().min(0),
+  durationMs: z.number().min(500),
+  // Altura do centro, em % da tela.
+  y: z.number().min(0).max(100),
+  cor: zColor(),
+});
+
+// Efeitos de cinema num trecho do vídeo (src/effects/EfeitosTela.tsx).
+export const tiposEfeitoTela = ["tremor", "luz", "vinheta", "pretoBranco"] as const;
+export const efeitoTelaSchema = z.object({
+  tipo: z.enum(tiposEfeitoTela),
+  startMs: z.number().min(0),
+  durationMs: z.number().min(200),
+  // 0.2 a 2, 1 = normal.
+  forca: z.number().min(0.2).max(2),
 });
 
 export const behindTextSchema = z.object({
@@ -93,6 +119,9 @@ export const shortVideoSchema = z.object({
   broll: z.array(brollSchema),
   // Animações prontas por cima do vídeo (tempo do vídeo editado).
   animacoes: z.array(animacaoSchema),
+  // Textos animados (nome e cargo, número contando...) e efeitos de cinema (tempo do vídeo editado).
+  cartelas: z.array(cartelaSchema),
+  efeitosTela: z.array(efeitoTelaSchema),
   // Correção de cor do vídeo (scripts/cor.py sugere; dá para ajustar na aba Efeitos).
   cor: corSchema,
   // Áudio da voz melhorado (scripts/audio.py: sem ruído e no volume certo). Vazio = som original.
@@ -115,6 +144,8 @@ export type BehindText = z.infer<typeof behindTextSchema>;
 export type Zoom = z.infer<typeof zoomSchema>;
 export type Cor = z.infer<typeof corSchema>;
 export type Animacao = z.infer<typeof animacaoSchema>;
+export type Cartela = z.infer<typeof cartelaSchema>;
+export type EfeitoTela = z.infer<typeof efeitoTelaSchema>;
 export type Broll = z.infer<typeof brollSchema>;
 export type CutTransition = (typeof cutTransitions)[number];
 export type CaptionStyle = (typeof captionStyles)[number];

@@ -339,3 +339,5 @@ scripts/
 - Whisper (MIT), MODNet (Apache-2.0), o detector de rostos YuNet (MIT), o Kokoro (Apache-2.0) e as
   fontes (OFL) são gratuitos e permitem uso comercial. O espeak-ng e o phonemizer (GPL-3.0) são
   usados só pelo `scripts/fonemas.py`, um programa à parte.
+- Os textos animados (`src/effects/Cartelas.tsx`) e os efeitos de cinema (`src/effects/EfeitosTela.tsx`)
+  foram feitos a partir das ideias do pacote remotion-templates (MIT, reactvideoeditor.com).

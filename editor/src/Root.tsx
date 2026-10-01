@@ -77,6 +77,8 @@ export const defaultProps: ShortVideoProps = {
   preview: "",
   cor: { brilho: 1, contraste: 1, saturacao: 1, temperatura: 0, sombras: 0 },
   animacoes: [],
+  cartelas: [],
+  efeitosTela: [],
   musicVolume: 0.25,
   duckTo: 0.3,
   sfx: true,

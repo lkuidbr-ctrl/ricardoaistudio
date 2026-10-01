@@ -8,6 +8,8 @@ import { BehindText } from "./effects/BehindText";
 import { Broll } from "./effects/Broll";
 import { CutTransition } from "./effects/CutTransition";
 import { Animacoes } from "./effects/Animacoes";
+import { Cartelas } from "./effects/Cartelas";
+import { LuzesDaTela, TelaComEfeitos } from "./effects/EfeitosTela";
 import { ComCor } from "./effects/Cor";
 import { CutAudio, CutVideo } from "./effects/CutVideo";
 import { HookTitle } from "./effects/HookTitle";
@@ -71,20 +73,22 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
   const sfxEvents = useMemo(() => {
     const at = (ms: number) => Math.round((ms / 1000) * fps);
     const events: SfxEvent[] = [];
-    const joinSound = { none: null, zoom: null, flash: "whoosh", whip: "whoosh", glitch: "glitch" } as const;
+    const joinSound = { none: null, zoom: null, flash: "whoosh", whip: "whoosh", glitch: "glitch", luz: "whoosh", tremor: "pop" } as const;
     const js = joinSound[props.cutTransition];
     if (js) for (const j of joins) events.push({ frame: j, name: js });
     if (props.emojis) for (const c of captions ?? []) if (c.emoji) events.push({ frame: at(c.startMs), name: "pop" });
     for (const b of broll) events.push({ frame: at(b.startMs), name: b.transition === "glitch" ? "glitch" : "whoosh" });
     for (const t of props.behindTexts) events.push({ frame: at(t.startMs), name: "swoosh" });
     for (const a of props.animacoes ?? []) events.push({ frame: at(a.startMs), name: a.tipo === "explosao" ? "whoosh" : "pop" });
+    for (const c of props.cartelas ?? []) events.push({ frame: at(c.startMs), name: c.tipo === "nome" ? "swoosh" : "pop" });
+    for (const e of props.efeitosTela ?? []) if (e.tipo === "tremor" || e.tipo === "luz") events.push({ frame: at(e.startMs), name: "whoosh" });
     if (props.hookText) events.push({ frame: 1, name: "pop" });
     if (ctaFrames > 0) {
       events.push({ frame: durationInFrames - ctaFrames, name: "whoosh" });
       events.push({ frame: durationInFrames - ctaFrames + 38, name: "pop" }); // "clique" no seguir
     }
     return events;
-  }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.animacoes, props.hookText, joins, captions, broll]);
+  }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.animacoes, props.cartelas, props.efeitosTela, props.hookText, joins, captions, broll]);
 
   // No preview usa a cópia leve (se houver); na exportação, sempre o vídeo original.
   const renderizando = getRemotionEnvironment().isRendering;
@@ -98,33 +102,35 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      <AutoZoom zooms={props.zooms}>
-        <CutTransition kind={props.cutTransition} joins={joins}>
-          {props.video ? (
-            <ComCor cor={props.cor} id="cor-video">
-              <CutVideo src={fonte} timeline={timeline} muted={Boolean(somDaFala)} />
-            </ComCor>
-          ) : null}
-
-          {props.behindTexts.map((t, i) => (
-            <Sequence
-              key={i}
-              from={Math.round((t.startMs / 1000) * fps)}
-              durationInFrames={Math.max(1, Math.round((t.durationMs / 1000) * fps))}
-            >
-              <BehindText item={t} />
-            </Sequence>
-          ))}
-
-          {props.person && props.behindTexts.length > 0 ? (
-            <AbsoluteFill>
-              <ComCor cor={props.cor} id="cor-pessoa">
-                <CutVideo src={props.person} timeline={timeline} transparent muted />
+      <TelaComEfeitos itens={props.efeitosTela ?? []}>
+        <AutoZoom zooms={props.zooms}>
+          <CutTransition kind={props.cutTransition} joins={joins}>
+            {props.video ? (
+              <ComCor cor={props.cor} id="cor-video">
+                <CutVideo src={fonte} timeline={timeline} muted={Boolean(somDaFala)} />
               </ComCor>
-            </AbsoluteFill>
-          ) : null}
-        </CutTransition>
-      </AutoZoom>
+            ) : null}
+
+            {props.behindTexts.map((t, i) => (
+              <Sequence
+                key={i}
+                from={Math.round((t.startMs / 1000) * fps)}
+                durationInFrames={Math.max(1, Math.round((t.durationMs / 1000) * fps))}
+              >
+                <BehindText item={t} />
+              </Sequence>
+            ))}
+
+            {props.person && props.behindTexts.length > 0 ? (
+              <AbsoluteFill>
+                <ComCor cor={props.cor} id="cor-pessoa">
+                  <CutVideo src={props.person} timeline={timeline} transparent muted />
+                </ComCor>
+              </AbsoluteFill>
+            ) : null}
+          </CutTransition>
+        </AutoZoom>
+      </TelaComEfeitos>
 
       {/* Depois da fala: o último quadro fica parado por baixo da tela final. */}
       {ctaFrames > 0 && props.video ? (
@@ -147,7 +153,10 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
         </Sequence>
       ))}
 
+      <LuzesDaTela itens={props.efeitosTela ?? []} />
+
       {props.animacoes?.length ? <Animacoes itens={props.animacoes} /> : null}
+      {props.cartelas?.length ? <Cartelas itens={props.cartelas} /> : null}
 
       {captions ? <Captions captions={captions} props={captionProps} /> : null}
 
