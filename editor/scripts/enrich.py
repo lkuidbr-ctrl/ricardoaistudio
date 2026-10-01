@@ -1,4 +1,5 @@
-"""Edição automática pela IA: destaques e emojis na legenda, zooms e título-gancho.
+"""Edição automática pela IA: destaques e emojis na legenda, zooms, título-gancho, animações,
+textos animados (nome e cargo, número contando...) e efeitos de cinema.
 
 Uso:
     python scripts/enrich.py public/video.mp4                      # Claude (padrão; centavos por vídeo)
@@ -26,7 +27,10 @@ Escolha:
    palavras fortes, nomes). Cerca de 1 a cada 6 palavras. Nunca artigos, preposições ou pronomes.
 2. "emojis": emojis para algumas palavras-chave (cerca de 1 a cada 10 palavras), sempre
    um único emoji que combine com o sentido da palavra no contexto da frase.
-   Não repita o mesmo emoji em palavras vizinhas.
+   Não repita o mesmo emoji em palavras vizinhas. Prefira estes, que se mexem no vídeo:
+   💸🤑📈📉📊🛒🏆🎯💡🧠📚✅❌⚠️👀🔥🚀⚡⏰❤️💔😄😂🤯😱😢😡🙏👍👎👏💪🤝🏠🚗✈️🌎🎉🎊🥳✨⭐🌟💎👑
+   🤔🤫😎😍🥰😭😅🙌👋👉👆💯🎬📸💬➕🆓🩺🍔💥💣⏳⌛🔔📣😴😬🤩😤🫶❗❓‼️🎁🔒📦🌈⚽🍀
+   (para dinheiro, use 💸 ou 🤑).
 3. "zooms": momentos para aproximar a câmera, na palavra de maior impacto de uma frase
    (revelação, número, promessa, virada). Cerca de 1 a cada 5 a 8 segundos, nunca dois com
    menos de 3 segundos entre eles e nunca nos 2 primeiros segundos. "forte": true só nos 1 ou 2
@@ -39,6 +43,19 @@ Escolha:
    aponta algo), "dinheiro" (dinheiro, ganhar, lucro), "coracao" (amor, saúde, cuidado),
    "fogo" (incrível, bombando), "like" (curte, segue, aprovado), "explosao" (revelação, choque),
    "confete" (conquista, comemoração), "brilhos" (novidade, dica de ouro).
+6. "cartelas": textos animados na tela. Poucos: de 0 a 3 num vídeo de 1 minuto, só quando ajudam.
+   - "nome": só se a pessoa se apresenta (diz o nome ou a profissão). "texto" = o nome,
+     "subtexto" = a profissão ou cargo (ou ""). No índice da apresentação.
+   - "numero": quando a pessoa fala um número marcante (dinheiro, porcentagem, quantidade, prazo).
+     "texto" = o número como deve aparecer na tela ("R$ 10.000", "95%", "3x", "30 dias");
+     "subtexto" = até 4 palavras explicando ("de faturamento").
+   - "digitando": uma regra ou dica curta que vale anotar (até 6 palavras, em "texto"; "subtexto" = "").
+   - "notificacao": só quando a fala é sobre venda, Pix, mensagem de cliente ou celular.
+     "texto" = a mensagem da notificação, "subtexto" = o nome do app ("Banco", "WhatsApp").
+   Escreva os textos em português correto, fiéis ao que é falado.
+7. "efeitos": efeitos de cinema, raros (de 0 a 2 num vídeo de 1 minuto), entre "indice" e "indice_fim":
+   "tremor" (choque, impacto, revelação forte; dura pouco), "luz" (momento emocional ou inspirador),
+   "pretoBranco" (lembrança, passado, "antes eu..."), "vinheta" (suspense, segredo).
 
 Use apenas os índices da lista."""
 
@@ -78,20 +95,47 @@ SCHEMA = {
                 "additionalProperties": False,
             },
         },
+        "cartelas": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "indice": {"type": "integer"},
+                    "tipo": {"type": "string", "enum": ["nome", "numero", "digitando", "notificacao"]},
+                    "texto": {"type": "string"},
+                    "subtexto": {"type": "string"},
+                },
+                "required": ["indice", "tipo", "texto", "subtexto"],
+                "additionalProperties": False,
+            },
+        },
+        "efeitos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "indice": {"type": "integer"},
+                    "indice_fim": {"type": "integer"},
+                    "tipo": {"type": "string", "enum": ["tremor", "luz", "pretoBranco", "vinheta"]},
+                },
+                "required": ["indice", "indice_fim", "tipo"],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": ["destaques", "emojis", "zooms", "gancho", "animacoes"],
+    "required": ["destaques", "emojis", "zooms", "gancho", "animacoes", "cartelas", "efeitos"],
     "additionalProperties": False,
 }
 
 # Dicionário para o modo sem IA: raiz da palavra (sem acento) -> emoji.
 DICIONARIO = {
-    "dinheir": "💰", "grana": "💰", "reais": "💵", "lucr": "📈", "venda": "🛒", "vend": "🛒",
-    "ganh": "🤑", "rico": "🤑", "milh": "💸", "mil": "💸", "caro": "💸", "barat": "🏷️", "gratis": "🆓",
+    "dinheir": "💸", "grana": "💸", "reais": "💸", "lucr": "📈", "venda": "🛒", "vend": "🛒",
+    "ganh": "🤑", "rico": "🤑", "milh": "💸", "mil": "💸", "caro": "💸", "barat": "🛒", "gratis": "🆓",
     "viral": "🚀", "virais": "🚀", "cresc": "📈", "result": "📊", "sucesso": "🏆", "venc": "🏆", "meta": "🎯",
     "objetivo": "🎯", "foco": "🎯", "ideia": "💡", "dica": "💡", "segredo": "🤫", "aprend": "🧠", "estud": "📚",
-    "facil": "✅", "rapid": "⚡", "tempo": "⏰", "hoje": "📅", "agora": "⏰", "fogo": "🔥", "incrivel": "🤯",
+    "facil": "✅", "rapid": "⚡", "tempo": "⏰", "hoje": "⏰", "agora": "⏰", "fogo": "🔥", "incrivel": "🤯",
     "insano": "🤯", "loucura": "🤯", "amor": "❤️", "ama": "❤️", "feliz": "😄", "triste": "😢", "medo": "😱",
-    "erro": "❌", "errad": "❌", "nunca": "🚫", "problema": "⚠️", "cuidado": "⚠️", "atencao": "👀", "olha": "👀",
+    "erro": "❌", "errad": "❌", "nunca": "❌", "problema": "⚠️", "cuidado": "⚠️", "atencao": "👀", "olha": "👀",
     "video": "🎬", "videos": "🎬", "celular": "📱", "instagram": "📸", "tiktok": "🎵", "youtube": "▶️",
     "trabalh": "💼", "empresa": "🏢", "negocio": "💼", "cliente": "🤝", "comida": "🍔", "academia": "💪",
     "treino": "💪", "forte": "💪", "saude": "🩺", "casa": "🏠", "carro": "🚗", "viagem": "✈️", "mundo": "🌎",
@@ -125,7 +169,8 @@ def por_dicionario(words: list[str]) -> dict:
     # Sem IA: zoom nas palavras com emoji (o filtro de distância mínima fica em zooms_em_ms).
     zooms = [{"indice": e["indice"], "forte": False} for e in emojis]
     animacoes = [{"indice": e["indice"], "tipo": ANIMACAO_DO_EMOJI[e["emoji"]]} for e in emojis if e["emoji"] in ANIMACAO_DO_EMOJI]
-    return {"destaques": destaques, "emojis": emojis, "zooms": zooms, "gancho": "", "animacoes": animacoes}
+    return {"destaques": destaques, "emojis": emojis, "zooms": zooms, "gancho": "", "animacoes": animacoes,
+            "cartelas": [], "efeitos": []}
 
 
 # Sem IA: algumas palavras com emoji também ganham uma animação.
@@ -145,6 +190,41 @@ def animacoes_em_ms(animacoes: list[dict], captions: list[dict], intervalo_ms: i
         saida.append({"sourceMs": inicio, "tipo": a["tipo"]})
         ultimo = inicio
     return saida
+
+
+DURACAO_CARTELA = {"nome": 3500, "numero": 2500, "digitando": 3000, "notificacao": 3000}
+
+
+def cartelas_em_ms(cartelas: list[dict], captions: list[dict], intervalo_ms: int = 4000) -> list[dict]:
+    """Índices da IA -> textos animados no tempo do vídeo original, sem dois colados."""
+    saida, ultimo = [], -intervalo_ms
+    for c in sorted(cartelas, key=lambda c: c["indice"]):
+        texto = c.get("texto", "").strip()
+        if not texto or not 0 <= c["indice"] < len(captions):
+            continue
+        inicio = captions[c["indice"]]["startMs"]
+        if inicio - ultimo < intervalo_ms:
+            continue
+        saida.append({"sourceMs": inicio, "tipo": c["tipo"], "texto": texto, "subtexto": c.get("subtexto", "").strip(),
+                      "durationMs": DURACAO_CARTELA.get(c["tipo"], 3000)})
+        ultimo = inicio
+    return saida
+
+
+def efeitos_em_ms(efeitos: list[dict], captions: list[dict]) -> list[dict]:
+    """Índices da IA -> efeitos de cinema no tempo do vídeo original (no máximo 3)."""
+    saida = []
+    for e in sorted(efeitos, key=lambda e: e["indice"]):
+        if not 0 <= e["indice"] < len(captions):
+            continue
+        inicio = captions[e["indice"]]["startMs"]
+        fim = captions[min(max(e["indice_fim"], e["indice"]), len(captions) - 1)]["endMs"]
+        if e["tipo"] == "tremor":
+            fim = inicio + 700
+        elif e["tipo"] == "luz":
+            fim = inicio + 1500
+        saida.append({"sourceMs": inicio, "sourceFimMs": max(fim, inicio + 500), "tipo": e["tipo"]})
+    return saida[:3]
 
 
 def zooms_em_ms(zooms: list[dict], captions: list[dict], intervalo_ms: int = 3000) -> list[dict]:
@@ -205,9 +285,13 @@ def main() -> None:
     zooms = zooms_em_ms(result.get("zooms", []), captions)
     gancho = result.get("gancho", "").strip().strip('"').strip()
     animacoes = animacoes_em_ms(result.get("animacoes", []), captions)
-    edicao = {"zooms": zooms, "gancho": gancho, "animacoes": animacoes, "aplicado": anterior.get("aplicado")}
+    cartelas = cartelas_em_ms(result.get("cartelas", []), captions)
+    efeitos = efeitos_em_ms(result.get("efeitos", []), captions)
+    edicao = {"zooms": zooms, "gancho": gancho, "animacoes": animacoes, "cartelas": cartelas, "efeitos": efeitos,
+              "aplicado": anterior.get("aplicado")}
     edicao_file.write_text(json.dumps(edicao, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"zooms: {len(zooms)} | animações: {len(animacoes)}" + (f" | gancho: {gancho}" if gancho else ""))
+    print(f"zooms: {len(zooms)} | animações: {len(animacoes)} | textos animados: {len(cartelas)} | efeitos: {len(efeitos)}"
+          + (f" | gancho: {gancho}" if gancho else ""))
     print(f"-> {edicao_file}")
 
 

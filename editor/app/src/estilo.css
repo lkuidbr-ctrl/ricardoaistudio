@@ -175,6 +175,14 @@ input[type="range"] { width: 100%; accent-color: var(--destaque); }
 .miniatura { width: 38px; height: 38px; object-fit: cover; border-radius: 8px; border: 1px solid var(--borda); }
 .erro-pequeno { color: var(--erro); font-size: 12px; }
 
+/* ---------- Minhas músicas ---------- */
+.lista-musicas { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; margin-bottom: 8px; }
+.musica-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #0f1015; border: 1px solid var(--borda); border-radius: 10px; padding: 6px 6px 6px 10px; }
+.musica-item.atual { border-color: var(--destaque); }
+.musica-item > div { display: grid; min-width: 0; }
+.musica-item b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.musica-item small { color: var(--texto-3); font-size: 12px; }
+
 /* ---------- estado vazio ---------- */
 .vazio { display: grid; place-content: center; justify-items: center; gap: 18px; padding: 24px; }
 .soltar {
@@ -227,6 +235,10 @@ input[type="range"] { width: 100%; accent-color: var(--destaque); }
 .frase textarea { width: 100%; resize: vertical; font: inherit; font-size: 13.5px; color: inherit; background: #0f1015; border: 1px solid var(--borda); border-radius: 8px; padding: 6px 8px; }
 .frase textarea:focus { outline: none; border-color: var(--destaque); }
 .frase.duvida textarea { border-color: #d4a72c; }
+.frase-topo { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.frase-topo .botao { padding: 1px 8px; font-size: 12px; }
+.frase.cortada textarea { text-decoration: line-through; opacity: .45; }
+.frase.cortada small { color: var(--erro); }
 .faixa-chave { display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #d4a72c; background: rgba(212, 167, 44, .12); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
 .faixa-chave:hover { background: rgba(212, 167, 44, .2); }
 .botao.exportando { background: linear-gradient(90deg, var(--destaque) var(--pct, 0%), rgba(124, 92, 255, .35) var(--pct, 0%)); min-width: 170px; }

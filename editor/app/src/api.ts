@@ -38,12 +38,13 @@ export const enviar = <T,>(metodo: "POST" | "PUT" | "DELETE", url: string, corpo
     body: corpo === undefined ? undefined : JSON.stringify(corpo),
   }).then(tratar);
 
-// Upload com progresso (0 a 1). tipo "video" vira projeto; "arquivo" vai para public/uploads.
-export const subirArquivo = (arquivo: File, tipo: "video" | "arquivo", aoProgredir?: (p: number) => void) =>
+// Upload com progresso (0 a 1). tipo "video" vira projeto; "musica" vai para Minhas músicas
+// (public/musicas); "arquivo" vai para public/uploads.
+export const subirArquivo = (arquivo: File, tipo: "video" | "arquivo" | "musica", aoProgredir?: (p: number) => void) =>
   subir(arquivo, tipo, aoProgredir).then((r) => r.caminho);
 
 // Para vídeos, o servidor pode devolver uma tarefa de conversão (ex.: vídeo de iPhone em HEVC).
-export const subir = (arquivo: File, tipo: "video" | "arquivo", aoProgredir?: (p: number) => void) =>
+export const subir = (arquivo: File, tipo: "video" | "arquivo" | "musica", aoProgredir?: (p: number) => void) =>
   new Promise<{ caminho: string; tarefa?: string }>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const form = new FormData();

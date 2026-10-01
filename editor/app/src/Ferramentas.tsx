@@ -254,7 +254,7 @@ export const Ferramentas: React.FC<{
           id: "automatico",
           icone: "🪄",
           titulo: "Editar automático",
-          descricao: "A IA faz tudo: legenda, cortes, áudio, cor, destaques, emojis, zooms, título-gancho e B-roll. Depois você só ajusta.",
+          descricao: "A IA faz tudo: legenda, cortes, áudio, cor, destaques, emojis, zooms, título-gancho, B-roll e música. Depois você só ajusta.",
           feito: arquivos.captions && arquivos.cuts && arquivos.emojis,
         }}
         tarefa={ultima("automatico")}

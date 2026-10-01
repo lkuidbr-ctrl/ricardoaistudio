@@ -18,6 +18,7 @@ const REPO_URL = process.env.STUDIO_REPO || "https://github.com/lkuidbr-ctrl/ric
 // Código de saída que avisa o iniciar.ps1: "atualizei, instale o que mudou e me abra de novo".
 const SAIR_PARA_ATUALIZAR = 42;
 const PUBLIC = path.join(EDITOR, "public");
+const MUSICAS = path.join(PUBLIC, "musicas");
 const OUT = path.join(EDITOR, "out");
 const DIST = path.join(APP, "dist");
 const CONFIG = path.join(APP, "config.json");
@@ -363,6 +364,11 @@ const FERRAMENTAS = {
     args: (v, o) => [py("broll.py"), v, ...argsIa(o)],
     campo: "brollFile",
   },
+  musica: {
+    rotulo: "Escolher música",
+    args: (v, o) => [py("musica.py"), "escolher", v, ...argsIa(o)],
+    musica: true,
+  },
   // Cópia leve (960 px de altura) só para o preview; a exportação usa sempre o original.
   preview: {
     rotulo: "Preparar o preview leve",
@@ -440,6 +446,14 @@ const novaAnimacao = (tipo, startMs) => ({
   cor: COR_ANIMACAO[tipo] ?? "#FFE600",
 });
 
+// Textos animados e efeitos de cinema: posição e cor padrão de cada tipo (iguais aos do app).
+const PADRAO_CARTELA = {
+  nome: { y: 62, cor: "#FFE600" },
+  numero: { y: 30, cor: "#22C55E" },
+  digitando: { y: 25, cor: "#FFFFFF" },
+  notificacao: { y: 14, cor: "#22C55E" },
+};
+
 const aplicarEdicaoIa = (projeto, cfg) => {
   const arq = noPublic(irmao(projeto, ".edicao.json"));
   const edicao = lerJson(arq, null);
@@ -450,15 +464,32 @@ const aplicarEdicaoIa = (projeto, cfg) => {
   if (!cfg.zooms?.length || mesmoJson(cfg.zooms, antes.zooms)) cfg.zooms = zooms;
   const animacoes = (edicao.animacoes || []).map((a) => novaAnimacao(a.tipo, Math.round(noVideoCortado(a.sourceMs, keep))));
   if (!cfg.animacoes?.length || mesmoJson(cfg.animacoes, antes.animacoes)) cfg.animacoes = animacoes;
+  const cartelas = (edicao.cartelas || [])
+    .filter((c) => PADRAO_CARTELA[c.tipo])
+    .map((c) => ({
+      tipo: c.tipo,
+      texto: c.texto,
+      subtexto: c.subtexto || "",
+      startMs: Math.round(noVideoCortado(c.sourceMs, keep)),
+      durationMs: c.durationMs || 3000,
+      ...PADRAO_CARTELA[c.tipo],
+    }));
+  if (!cfg.cartelas?.length || mesmoJson(cfg.cartelas, antes.cartelas)) cfg.cartelas = cartelas;
+  const efeitosTela = (edicao.efeitos || []).map((e) => {
+    const startMs = Math.round(noVideoCortado(e.sourceMs, keep));
+    return { tipo: e.tipo, startMs, durationMs: Math.max(300, Math.round(noVideoCortado(e.sourceFimMs, keep)) - startMs), forca: 1 };
+  });
+  if (!cfg.efeitosTela?.length || mesmoJson(cfg.efeitosTela, antes.efeitosTela)) cfg.efeitosTela = efeitosTela;
   if (edicao.gancho && (!cfg.hookText || cfg.hookText === antes.gancho)) {
     cfg.hookText = edicao.gancho;
     cfg.hookDurationMs = cfg.hookDurationMs || 2500;
   }
-  salvarJson(arq, { ...edicao, aplicado: { zooms: cfg.zooms, gancho: cfg.hookText, animacoes: cfg.animacoes } });
+  salvarJson(arq, { ...edicao, aplicado: { zooms: cfg.zooms, gancho: cfg.hookText, animacoes: cfg.animacoes, cartelas: cfg.cartelas, efeitosTela: cfg.efeitosTela } });
 };
 
 // O que cada ferramenta muda no projeto quando termina.
 const aplicarFerramenta = (projeto, f) => {
+  garantirEmojisAnimados(projeto);
   if (f.cor) {
     // A cor sugerida vira o ajuste de cor do projeto (dá para mexer depois na aba Efeitos).
     const cor = lerJson(noPublic(irmao(projeto, ".cor.json")), null);
@@ -469,7 +500,15 @@ const aplicarFerramenta = (projeto, f) => {
     }
     return;
   }
+  if (f.musica) {
+    const cfg = configuracoesDoProjeto(projeto);
+    aplicarMusica(projeto, cfg);
+    salvarConfiguracoes(projeto, cfg);
+    return;
+  }
   if (!f.campo && !f.extra) return;
+  // O cut.py escreve o .cuts.json do zero: põe de volta as frases tiradas pela aba Legenda.
+  if (f.campo === "cuts") aplicarCortesTexto(projeto);
   const cfg = configuracoesDoProjeto(projeto);
   if (f.campo) cfg[f.campo] = irmao(projeto, GERADOS[f.campo]);
   Object.assign(cfg, f.extra?.() ?? {});
@@ -483,11 +522,14 @@ const rodarAutomatico = (t, projeto, opcoes) => {
   const passos = [];
   if (!tem(".proxy.mp4") && precisaPreviewLeve(noPublic(projeto))) passos.push("preview");
   if (!tem(".captions.json")) passos.push("transcrever");
-  if (!tem(".cuts.json")) passos.push("cortar");
+  // Um .cuts.json feito só pelos cortes da aba Legenda ainda não tem o corte de silêncios.
+  if (!tem(".cuts.json") || lerJson(noPublic(irmao(projeto, ".cuts.json")), {}).soTexto) passos.push("cortar");
   if (!tem(".voz.m4a")) passos.push("audio");
   if (!tem(".cor.json")) passos.push("cor");
   passos.push("emojis");
   if (config().pexelsKey || process.env.PEXELS_API_KEY) passos.push("broll");
+  // Música da biblioteca, se tiver músicas e o vídeo ainda não tiver uma.
+  if (musicasDaBiblioteca().length && !configuracoesDoProjeto(projeto).music) passos.push("musica");
   const proximo = (i) => {
     if (t.status === "cancelado") return;
     if (i >= passos.length) {
@@ -511,10 +553,10 @@ const rodarAutomatico = (t, projeto, opcoes) => {
         setImmediate(() => proximo(i + 1));
         return null;
       },
-      // B-roll é um extra: se falhar (internet, Pexels), o resto do vídeo continua pronto.
-      aoFalhar: passos[i] === "broll"
+      // B-roll e música são extras: se falharem (internet, Pexels...), o resto do vídeo continua pronto.
+      aoFalhar: passos[i] === "broll" || passos[i] === "musica"
         ? () => {
-            t.aviso = "o B-roll automático não deu certo desta vez (veja os detalhes). O resto ficou pronto.";
+            t.aviso = `${passos[i] === "broll" ? "o B-roll automático" : "a escolha da música"} não deu certo desta vez (veja os detalhes). O resto ficou pronto.`;
             setImmediate(() => proximo(i + 1));
             return true;
           }
@@ -528,6 +570,49 @@ const precisaLegenda = new Set(["cortar", "emojis", "broll", "clipes", "dublar"]
 
 // ------------------------------------------------------------------ servidor
 
+// ------------------------------------------------------------------ emojis animados
+// Animação de cada emoji usado na legenda (Noto Animated Emoji, do Google, CC BY 4.0), salva em
+// public/emoji-animado/<código>.json. Emoji sem versão animada ganha um arquivo {"semAnimacao": true}
+// para não ser procurado de novo; sem internet, nada é salvo e o emoji fica parado.
+const EMOJI_ANIMADO = path.join(PUBLIC, "emoji-animado");
+const codigoEmoji = (emoji) => Array.from(emoji).map((c) => c.codePointAt(0).toString(16)).join("_");
+const baixandoEmoji = new Map();
+
+const baixarEmojiAnimado = (emoji) => {
+  const codigo = codigoEmoji(emoji);
+  const destino = path.join(EMOJI_ANIMADO, `${codigo}.json`);
+  if (fs.existsSync(destino)) return Promise.resolve();
+  if (baixandoEmoji.has(codigo)) return baixandoEmoji.get(codigo);
+  // O Google às vezes nomeia com o "fe0f" (variação colorida) e às vezes sem.
+  const nomes = [...new Set([codigo, codigo.replace(/_fe0f/g, ""), /_/.test(codigo) ? null : `${codigo}_fe0f`].filter(Boolean))];
+  const tarefa = (async () => {
+    for (const nome of nomes) {
+      const r = await fetch(`https://fonts.gstatic.com/s/e/notoemoji/latest/${nome}/lottie.json`, { signal: AbortSignal.timeout(15000) });
+      if (r.ok) {
+        const texto = await r.text();
+        JSON.parse(texto); // confere que veio uma animação inteira
+        fs.mkdirSync(EMOJI_ANIMADO, { recursive: true });
+        fs.writeFileSync(destino, texto);
+        return;
+      }
+      if (r.status !== 404) throw new Error(`HTTP ${r.status}`);
+    }
+    fs.mkdirSync(EMOJI_ANIMADO, { recursive: true });
+    fs.writeFileSync(destino, JSON.stringify({ semAnimacao: true }));
+  })()
+    .catch((e) => console.log(`Emoji animado ${emoji}: não consegui baixar (${e.message}); fica parado.`))
+    .finally(() => baixandoEmoji.delete(codigo));
+  baixandoEmoji.set(codigo, tarefa);
+  return tarefa;
+};
+
+// Baixa as animações dos emojis da legenda do projeto (os que ainda não tem).
+const garantirEmojisAnimados = (projeto) => {
+  const legenda = lerJson(noPublic(irmao(projeto, ".captions.json")), []);
+  const emojis = new Set(Array.isArray(legenda) ? legenda.map((w) => w?.emoji).filter((e) => typeof e === "string" && e.trim()) : []);
+  return Promise.all([...emojis].map((e) => baixarEmojiAnimado(e.trim())));
+};
+
 const app = express();
 app.use(express.json({ limit: "5mb" }));
 
@@ -537,6 +622,7 @@ app.get("/api/projeto", (req, res) => {
   const id = String(req.query.id || "");
   if (!fs.existsSync(noPublic(id))) return res.status(404).json({ erro: "vídeo não encontrado" });
   res.json({ id, arquivos: arquivosDoProjeto(id), configuracoes: configuracoesDoProjeto(id) });
+  garantirEmojisAnimados(id);
 });
 
 app.put("/api/projeto", (req, res) => {
@@ -549,9 +635,9 @@ app.put("/api/projeto", (req, res) => {
 // ------------------------------------------------------------------ Peça para a IA
 // Ajustes que a IA pode mudar pelo pedido em texto (o app confere de novo antes de aplicar).
 const AJUSTES_DO_PEDIDO = [
-  "captionStyle", "captionColor", "highlightColor", "captionY", "wordsWindowMs", "emojis", "keywords",
+  "captionStyle", "captionColor", "highlightColor", "captionY", "wordsWindowMs", "emojis", "emojiAnimado", "keywords",
   "zooms", "cutTransition", "hookText", "hookDurationMs", "behindTexts", "musicVolume", "duckTo", "sfx", "sfxVolume",
-  "cor", "animacoes",
+  "cor", "animacoes", "cartelas", "efeitosTela", "noRitmo", "pulsoBatida", "musicInicioMs",
 ];
 
 // Legenda em frases com o tempo do vídeo editado, para a IA saber o que é dito e quando.
@@ -650,6 +736,7 @@ app.put("/api/legenda", (req, res) => {
   if (!fs.existsSync(arq)) return res.status(404).json({ erro: "legenda não encontrada" });
   salvarJson(arq, req.body);
   res.json({ ok: true });
+  garantirEmojisAnimados(id);
 });
 
 // Lista do B-roll automático: o app mostra as cenas e deixa remover as que não combinaram.
@@ -676,13 +763,13 @@ app.delete("/api/projeto", (req, res) => {
 const upload = multer({
   storage: multer.diskStorage({
     destination: (req, _file, cb) => {
-      const pasta = req.query.tipo === "video" ? PUBLIC : path.join(PUBLIC, "uploads");
+      const pasta = req.query.tipo === "video" ? PUBLIC : req.query.tipo === "musica" ? MUSICAS : path.join(PUBLIC, "uploads");
       fs.mkdirSync(pasta, { recursive: true });
       cb(null, pasta);
     },
     filename: (req, file, cb) => {
       const original = Buffer.from(file.originalname, "latin1").toString("utf-8");
-      const pasta = req.query.tipo === "video" ? PUBLIC : path.join(PUBLIC, "uploads");
+      const pasta = req.query.tipo === "video" ? PUBLIC : req.query.tipo === "musica" ? MUSICAS : path.join(PUBLIC, "uploads");
       cb(null, semColisao(pasta, nomeSeguro(original)));
     },
   }),
@@ -690,6 +777,10 @@ const upload = multer({
 app.post("/api/upload", upload.single("arquivo"), (req, res) => {
   if (!req.file) return res.status(400).json({ erro: "nenhum arquivo" });
   const caminho = relPublic(req.file.path);
+  if (req.query.tipo === "musica") {
+    analisarMusicas();
+    return res.json({ caminho });
+  }
   if (req.query.tipo !== "video" || !precisaConverter(req.file.path)) return res.json({ caminho });
 
   // Converte para um formato que qualquer navegador toca, com barra de progresso.
@@ -715,6 +806,162 @@ app.get("/api/uploads", (_req, res) => {
   const pasta = path.join(PUBLIC, "uploads");
   const itens = fs.existsSync(pasta) ? fs.readdirSync(pasta).map((n) => `uploads/${n}`) : [];
   res.json(itens);
+});
+
+// ------------------------------------------------------------------ cortar pelo texto
+// Frases que você tirou do vídeo pela aba Legenda ficam em <vídeo>.cortes-texto.json (tempo do
+// vídeo original). O .cuts.json guarda o corte de silêncios em "keepOriginal" e, em "keep",
+// o resultado já sem essas frases (é o que o editor usa). Refazer o corte de silêncios mantém
+// as frases tiradas.
+const subtrairTrechos = (keep, tirar) => {
+  let saida = keep.map((k) => ({ ...k }));
+  for (const t of tirar) {
+    saida = saida.flatMap((k) => {
+      if (t.endMs <= k.startMs || t.startMs >= k.endMs) return [k];
+      const partes = [];
+      if (t.startMs > k.startMs) partes.push({ startMs: k.startMs, endMs: t.startMs });
+      if (t.endMs < k.endMs) partes.push({ startMs: t.endMs, endMs: k.endMs });
+      return partes;
+    });
+  }
+  return saida.filter((k) => k.endMs - k.startMs >= 100); // pedacinhos menores que 0,1 s somem
+};
+
+const aplicarCortesTexto = (projeto) => {
+  const removidos = lerJson(noPublic(irmao(projeto, ".cortes-texto.json")), []);
+  const arq = noPublic(irmao(projeto, ".cuts.json"));
+  let cuts = lerJson(arq, null);
+  if (!cuts && !removidos.length) return null;
+  if (!cuts) {
+    // Sem corte de silêncios: o vídeo inteiro, menos as frases tiradas.
+    const duracao = Math.round(Number(ffprobe(noPublic(projeto), ["-show_entries", "format=duration"])) * 1000);
+    if (!duracao) return null;
+    cuts = { keep: [{ startMs: 0, endMs: duracao }], soTexto: true };
+  }
+  const base = cuts.keepOriginal ?? cuts.keep;
+  salvarJson(arq, { ...cuts, keepOriginal: base, keep: subtrairTrechos(base, removidos) });
+  return irmao(projeto, ".cuts.json");
+};
+
+app.get("/api/cortes-texto", (req, res) => {
+  res.json(lerJson(noPublic(irmao(String(req.query.projeto || ""), ".cortes-texto.json")), []));
+});
+
+const mudarCortesTexto = (projeto, res, mudar) => {
+  if (!projeto || !fs.existsSync(noPublic(projeto))) return res.status(404).json({ erro: "vídeo não encontrado" });
+  const arq = noPublic(irmao(projeto, ".cortes-texto.json"));
+  const cfgAntes = configuracoesDoProjeto(projeto);
+  const keepAntes = cfgAntes.cuts ? lerJson(noPublic(cfgAntes.cuts), {}).keep ?? null : null;
+  const lista = mudar(lerJson(arq, [])).sort((a, b) => a.startMs - b.startMs);
+  salvarJson(arq, lista);
+  const cuts = aplicarCortesTexto(projeto);
+  if (cuts) {
+    const cfg = configuracoesDoProjeto(projeto);
+    cfg.cuts = cuts;
+    salvarConfiguracoes(projeto, cfg);
+  }
+  res.json({ lista, cuts, keepAntes, keepDepois: cuts ? lerJson(noPublic(cuts), {}).keep : null });
+};
+
+app.post("/api/cortes-texto", (req, res) => {
+  const { projeto, startMs, endMs, texto } = req.body || {};
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return res.status(400).json({ erro: "trecho inválido" });
+  mudarCortesTexto(String(projeto || ""), res, (lista) => [
+    ...lista.filter((r) => r.startMs !== startMs),
+    { startMs: Math.round(startMs), endMs: Math.round(endMs), texto: String(texto || "").slice(0, 200) },
+  ]);
+});
+
+app.delete("/api/cortes-texto", (req, res) => {
+  const startMs = Number(req.query.startMs);
+  mudarCortesTexto(String(req.query.projeto || ""), res, (lista) => lista.filter((r) => r.startMs !== startMs));
+});
+
+// ------------------------------------------------------------------ Minhas músicas
+// As músicas do usuário (ex.: feitas no Suno) ficam em public/musicas/. O musica.py descobre o ritmo
+// de cada uma (<música>.ritmo.json) e escolhe a que combina com cada vídeo.
+const EXT_MUSICA = /\.(mp3|wav|m4a|aac|ogg|flac|opus)$/i;
+const HISTORICO_MUSICAS = path.join(MUSICAS, ".historico.json");
+const musicasDaBiblioteca = () =>
+  fs.existsSync(MUSICAS) ? fs.readdirSync(MUSICAS).filter((n) => EXT_MUSICA.test(n) && !n.startsWith(".")).sort() : [];
+const ritmoDa = (nome) => lerJson(path.join(MUSICAS, `${nome}.ritmo.json`), null);
+const marcarMusicaUsada = (arquivo) => {
+  const nome = path.basename(arquivo);
+  const historico = lerJson(HISTORICO_MUSICAS, []).filter((n) => n !== nome);
+  salvarJson(HISTORICO_MUSICAS, [...historico, nome].slice(-30));
+};
+
+// Analisa (em segundo plano) as músicas que ainda não têm o ritmo calculado.
+let analisandoMusicas = false;
+const analisarMusicas = () => {
+  if (analisandoMusicas) return;
+  const faltam = musicasDaBiblioteca().filter((n) => !fs.existsSync(path.join(MUSICAS, `${n}.ritmo.json`)));
+  if (!faltam.length) return;
+  analisandoMusicas = true;
+  const proc = spawn(pythonExe(), [py("musica.py"), "analisar", ...faltam.map((n) => path.join(MUSICAS, n))], {
+    cwd: EDITOR,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+    windowsHide: true,
+  });
+  proc.stdout.on("data", (d) => process.stdout.write(d));
+  proc.on("close", () => {
+    analisandoMusicas = false;
+    // Chegou outra música enquanto analisava: analisa ela também.
+    if (musicasDaBiblioteca().some((n) => !fs.existsSync(path.join(MUSICAS, `${n}.ritmo.json`)))) setTimeout(analisarMusicas, 500);
+  });
+  proc.on("error", () => (analisandoMusicas = false));
+};
+
+app.get("/api/musicas", (_req, res) => {
+  analisarMusicas();
+  res.json(
+    musicasDaBiblioteca().map((nome) => {
+      const r = ritmoDa(nome);
+      return {
+        arquivo: `musicas/${nome}`,
+        nome: nome.replace(EXT_MUSICA, "").replace(/[-_]+/g, " "),
+        bpm: r?.bpm ?? null,
+        clima: r?.clima ?? null,
+        inicioMs: r?.inicioMs ?? 0,
+        duracaoMs: r?.duracaoMs ?? null,
+      };
+    }),
+  );
+});
+
+app.delete("/api/musicas", (req, res) => {
+  const nome = path.basename(String(req.query.arquivo || ""));
+  const abs = path.join(MUSICAS, nome);
+  if (!EXT_MUSICA.test(nome) || !fs.existsSync(abs)) return res.status(404).json({ erro: "música não encontrada" });
+  fs.rmSync(abs, { force: true });
+  fs.rmSync(path.join(MUSICAS, `${nome}.ritmo.json`), { force: true });
+  res.json({ ok: true });
+});
+
+// Música escolhida para o vídeo: a primeira da fila do musica.py, começando na parte boa.
+const aplicarMusica = (projeto, cfg) => {
+  const escolha = lerJson(noPublic(irmao(projeto, ".musica.json")), null);
+  const primeira = escolha?.opcoes?.find((m) => fs.existsSync(noPublic(m)));
+  if (!primeira) return;
+  cfg.music = primeira;
+  cfg.musicInicioMs = escolha.inicios?.[primeira] ?? ritmoDa(path.basename(primeira))?.inicioMs ?? 0;
+  marcarMusicaUsada(primeira);
+};
+
+// Botão "Trocar": a próxima da fila da IA (ou, sem fila, a menos usada da biblioteca).
+app.post("/api/musica/trocar", (req, res) => {
+  const { projeto, atual } = req.body || {};
+  const fila = (lerJson(noPublic(irmao(String(projeto || ""), ".musica.json")), {})?.opcoes || []).filter((m) => fs.existsSync(noPublic(m)));
+  const historico = lerJson(HISTORICO_MUSICAS, []);
+  const biblioteca = musicasDaBiblioteca()
+    .map((n) => `musicas/${n}`)
+    .sort((a, b) => historico.indexOf(path.basename(a)) - historico.indexOf(path.basename(b)));
+  const ordem = [...new Set([...fila, ...biblioteca])];
+  if (!ordem.length) return res.status(400).json({ erro: "Coloque músicas em Minhas músicas primeiro." });
+  const i = ordem.indexOf(atual);
+  const proxima = ordem[(i + 1) % ordem.length];
+  marcarMusicaUsada(proxima);
+  res.json({ music: proxima, musicInicioMs: ritmoDa(path.basename(proxima))?.inicioMs ?? 0 });
 });
 
 // Ferramentas de IA
@@ -883,6 +1130,7 @@ app.post("/api/exportar", (req, res) => {
   }
   salvarJson(propsArq, { ...props, ...extras, video: projeto });
   const t = novaTarefa("exportar", projeto, "Exportar vídeo");
+  const emojisProntos = props?.emojis && props?.emojiAnimado !== false ? garantirEmojisAnimados(projeto) : Promise.resolve();
   const logArq = path.join(OUT, nome.replace(/\.mp4$/, ".log"));
 
   // Por padrão o Remotion renderiza metade dos núcleos ao mesmo tempo (8 num Ryzen 7), o que
@@ -919,7 +1167,8 @@ app.post("/api/exportar", (req, res) => {
       },
     });
   };
-  renderizar();
+  // Antes de começar, espera baixar as animações dos emojis (se faltar alguma).
+  emojisProntos.finally(renderizar);
   res.json({ id: t.id });
 });
 

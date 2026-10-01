@@ -1,7 +1,7 @@
 {
   "name": "ricardo-video-editor",
   "version": "1.0.0",
-  "description": "Editor de v\u00eddeos curtos: legendas animadas, zoom e texto atr\u00e1s da pessoa.",
+  "description": "Editor de vídeos curtos: legendas animadas, zoom e texto atrás da pessoa.",
   "scripts": {
     "studio": "remotion studio",
     "render": "remotion render ShortVideo out/video.mp4",
@@ -13,10 +13,12 @@
     "@remotion/captions": "4.0.529",
     "@remotion/cli": "4.0.529",
     "@remotion/fonts": "^4.0.529",
+    "@remotion/lottie": "4.0.529",
     "@remotion/media-parser": "4.0.529",
     "@remotion/player": "^4.0.529",
     "@remotion/zod-types": "4.0.529",
     "express": "^5.2.1",
+    "lottie-web": "5.13.0",
     "multer": "^2.4.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

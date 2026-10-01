@@ -330,6 +330,7 @@ scripts/
   broll.py              B-roll automático com clipes grátis do Pexels
   _ia.py                chamadas de IA compartilhadas (Claude via login OAuth / Ollama)
   gerar_sfx.py          sintetiza os efeitos sonoros de public/sfx/ (sem direito autoral)
+  musica.py             Minhas músicas: ritmo de cada música e escolha da música de cada vídeo
   segment.py            MODNet -> pessoa com fundo transparente
 ```
 
@@ -339,3 +340,8 @@ scripts/
 - Whisper (MIT), MODNet (Apache-2.0), o detector de rostos YuNet (MIT), o Kokoro (Apache-2.0) e as
   fontes (OFL) são gratuitos e permitem uso comercial. O espeak-ng e o phonemizer (GPL-3.0) são
   usados só pelo `scripts/fonemas.py`, um programa à parte.
+- Os textos animados (`src/effects/Cartelas.tsx`) e os efeitos de cinema (`src/effects/EfeitosTela.tsx`)
+  foram feitos a partir das ideias do pacote remotion-templates (MIT, reactvideoeditor.com).
+- Emojis animados: Noto Animated Emoji, do Google (CC BY 4.0, "Animated emoji by Google"). O
+  Studio baixa a animação de cada emoji usado para `public/emoji-animado/`. Ao vender, citar o
+  Google nos créditos do programa.

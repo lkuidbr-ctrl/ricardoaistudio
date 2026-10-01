@@ -28,10 +28,11 @@ export const SoundEffects: React.FC<{ events: SfxEvent[]; volume: number }> = ({
 // Música de fundo em loop que abaixa sozinha enquanto você fala (ducking).
 export const Music: React.FC<{
   src: string;
+  inicioMs: number; // pula a introdução da música
   volume: number;
   duckTo: number; // fração do volume durante a fala (0.3 = 30%)
   speech: { startMs: number; endMs: number }[];
-}> = ({ src, volume, duckTo, speech }) => {
+}> = ({ src, inicioMs, volume, duckTo, speech }) => {
   const { fps, durationInFrames } = useVideoConfig();
 
   const curve = useMemo(() => {
@@ -60,6 +61,7 @@ export const Music: React.FC<{
   return (
     <Audio
       src={staticFile(src)}
+      trimBefore={Math.round((inicioMs / 1000) * fps) || undefined}
       loop
       loopVolumeCurveBehavior="extend"
       volume={(f) => curve[Math.min(curve.length - 1, Math.max(0, f))]}

@@ -1,6 +1,7 @@
 import React, { useId } from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
 import type { CutTransition as Kind } from "../schema";
+import { luzDeFilme, tremor } from "./EfeitosTela";
 import { Glitch } from "./Glitch";
 
 const around = (frame: number, joins: number[]) => {
@@ -28,6 +29,7 @@ export const CutTransition: React.FC<{ kind: Kind; joins: number[]; children: Re
   let blur = 0;
   let flash = 0;
   let glitch = 0;
+  let luz = 0;
   if (ativo && kind === "zoom") {
     // Jump cut clássico: trechos alternam entre normal e "câmera mais perto".
     const segment = joins.filter((j) => frame >= j).length;
@@ -46,6 +48,16 @@ export const CutTransition: React.FC<{ kind: Kind; joins: number[]; children: Re
     if (x !== 0) transform = `translateX(${x}px) scale(${cover})`;
   } else if (ativo && kind === "glitch") {
     glitch = interpolate(Math.abs(d), [0, 4], [1, 0], { extrapolateRight: "clamp" });
+  } else if (ativo && kind === "luz") {
+    // Clarão de luz de filme passando pela emenda.
+    luz = interpolate(d, [-6, 0, 10], [0, 1.2, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  } else if (ativo && kind === "tremor") {
+    // A câmera "leva um tranco" logo depois da emenda.
+    const forca = interpolate(d, [0, 9], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+    if (d >= 0 && forca > 0) {
+      const t = tremor(d, forca);
+      transform = `translate(${t.x}px, ${t.y}px) scale(${1 + (2 * Math.max(Math.abs(t.x), Math.abs(t.y))) / 1080})`;
+    }
   }
 
   return (
@@ -61,6 +73,7 @@ export const CutTransition: React.FC<{ kind: Kind; joins: number[]; children: Re
         </Glitch>
       </AbsoluteFill>
       <AbsoluteFill style={{ backgroundColor: "white", opacity: flash, pointerEvents: "none" }} />
+      <AbsoluteFill style={{ background: luzDeFilme(frame, luz), mixBlendMode: "screen", pointerEvents: "none" }} />
     </AbsoluteFill>
   );
 };

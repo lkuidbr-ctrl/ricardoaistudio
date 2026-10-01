@@ -1,8 +1,10 @@
 // Coluna direita: todos os ajustes visuais do vídeo, em abas.
 import React, { useEffect, useRef, useState } from "react";
-import type { Animacao, Broll, BehindText, CaptionStyle, ShortVideoProps, Zoom } from "../../src/schema";
+import type { Animacao, Broll, BehindText, CaptionStyle, Cartela, EfeitoTela, ShortVideoProps, Zoom } from "../../src/schema";
 import { COR_ANIMACAO, TIPOS_ANIMACAO } from "../../src/effects/Animacoes";
-import { enviar, formatarTempo, get, type Arquivos } from "./api";
+import { PADRAO_CARTELA, TIPOS_CARTELA } from "../../src/effects/Cartelas";
+import { DURACAO_EFEITO_TELA, TIPOS_EFEITO_TELA } from "../../src/effects/EfeitosTela";
+import { enviar, formatarTempo, get, subirArquivo, type Arquivos } from "./api";
 import { Alternar, Cor, Deslizante, EnviarArquivo, Escolha, Linha, Secao, Texto } from "./campos";
 
 type Props = {
@@ -142,7 +144,51 @@ const reescrever = (antigas: Palavra[], texto: string, limiteMs: number): Palavr
   });
 };
 
-const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["mudar"]; ligada: boolean }> = ({ video, arquivo, mudar, ligada }) => {
+// Trechos mantidos do vídeo original (o .cuts.json); null = o vídeo inteiro.
+type Trechos = { startMs: number; endMs: number }[] | null;
+
+// Tempo do vídeo editado -> tempo do vídeo original, e o contrário (como o noVideoCortado do servidor).
+const paraOriginal = (ms: number, keep: Trechos) => {
+  if (!keep?.length) return ms;
+  let antes = 0;
+  for (const k of keep) {
+    const dur = k.endMs - k.startMs;
+    if (ms < antes + dur) return k.startMs + (ms - antes);
+    antes += dur;
+  }
+  return keep[keep.length - 1].endMs + (ms - antes);
+};
+const paraEditado = (ms: number, keep: Trechos) => {
+  if (!keep?.length) return ms;
+  let antes = 0;
+  for (const k of keep) {
+    if (ms < k.startMs) return antes; // caiu num trecho cortado: vai para o próximo
+    if (ms <= k.endMs) return antes + (ms - k.startMs);
+    antes += k.endMs - k.startMs;
+  }
+  return antes;
+};
+
+// Quando uma frase sai (ou volta), zooms, textos e efeitos andam junto com a fala.
+const acompanharCorte = (props: ShortVideoProps, antes: Trechos, depois: Trechos): Partial<ShortVideoProps> => {
+  const t = (ms: number) => Math.round(paraEditado(paraOriginal(ms, antes), depois));
+  return {
+    zooms: props.zooms.map((z) => ({ ...z, atMs: t(z.atMs) })),
+    animacoes: (props.animacoes ?? []).map((a) => ({ ...a, startMs: t(a.startMs) })),
+    cartelas: (props.cartelas ?? []).map((c) => ({ ...c, startMs: t(c.startMs) })),
+    efeitosTela: (props.efeitosTela ?? []).map((e) => ({ ...e, startMs: t(e.startMs) })),
+    behindTexts: props.behindTexts.map((b) => ({ ...b, startMs: t(b.startMs) })),
+    broll: props.broll.map((b) => ({ ...b, startMs: t(b.startMs) })),
+  };
+};
+
+const CorrigirLegenda: React.FC<{ props: ShortVideoProps; arquivo: string; mudar: Props["mudar"]; ligada: boolean }> = ({
+  props,
+  arquivo,
+  mudar,
+  ligada,
+}) => {
+  const video = props.video;
   const [palavras, setPalavras] = useState<Palavra[] | null>(null);
   const [rascunho, setRascunho] = useState<Record<number, string>>({});
   // Aberto de cara: corrigir a transcrição é o ajuste mais comum.
@@ -165,8 +211,41 @@ const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["
     };
   }, [arquivo, aberto, versao]);
 
+  // Frases tiradas do vídeo (tempo do vídeo original).
+  const [cortes, setCortes] = useState<{ startMs: number; endMs: number }[]>([]);
+  const [cortando, setCortando] = useState(false);
+  useEffect(() => {
+    get<{ startMs: number; endMs: number }[]>(`/api/cortes-texto?projeto=${encodeURIComponent(video)}`).then(setCortes).catch(() => {});
+  }, [video, versao]);
+
   const frases = palavras ? emFrases(palavras) : [];
   const textoDe = (f: { inicio: number; fim: number }) => palavras!.slice(f.inicio, f.fim).map((p) => p.text.trim()).join(" ");
+  const trechoDe = (f: { inicio: number; fim: number }) => ({ startMs: palavras![f.inicio].startMs, endMs: palavras![f.fim - 1].endMs });
+  const cortada = (f: { inicio: number; fim: number }) => {
+    const t = trechoDe(f);
+    return cortes.find((c) => c.startMs <= t.startMs && c.endMs >= t.endMs);
+  };
+  // Tira (ou devolve) a frase do vídeo e recarrega o preview com o corte novo.
+  const cortar = async (f: { inicio: number; fim: number }) => {
+    if (cortando) return;
+    setCortando(true);
+    try {
+      const ja = cortada(f);
+      type Resposta = { lista: typeof cortes; cuts: string | null; keepAntes: Trechos; keepDepois: Trechos };
+      const r = ja
+        ? await enviar<Resposta>("DELETE", `/api/cortes-texto?projeto=${encodeURIComponent(video)}&startMs=${ja.startMs}`)
+        : await enviar<Resposta>("POST", "/api/cortes-texto", { projeto: video, ...trechoDe(f), texto: textoDe(f) });
+      setCortes(r.lista);
+      // Sem o corte ligado no editor, o vídeo antes era o inteiro.
+      const antes = props.cuts ? r.keepAntes : null;
+      mudar({ ...acompanharCorte(props, antes, r.keepDepois), cuts: "" });
+      setTimeout(() => mudar({ cuts: r.cuts ?? "" }), 50);
+    } catch {
+      // o aviso de erro já aparece pelo app
+    } finally {
+      setCortando(false);
+    }
+  };
 
   const salvar = async (fi: number) => {
     if (!palavras) return;
@@ -191,7 +270,7 @@ const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["
   return (
     <Secao
       titulo="Corrigir o texto"
-      dica="Se a transcrição errou alguma palavra, corrija aqui. As frases em amarelo são onde a IA ficou em dúvida."
+      dica="Corrija as palavras que a transcrição errou (as frases em amarelo são onde a IA ficou em dúvida). Em ✂️ Cortar, a frase sai do vídeo."
       acao={
         <button type="button" className="botao pequeno secundario" onClick={() => setAberto((v) => !v)}>
           {aberto ? "Fechar" : "Abrir texto"}
@@ -202,11 +281,27 @@ const CorrigirLegenda: React.FC<{ video: string; arquivo: string; mudar: Props["
         <div className="frases">
           {frases.map((f, fi) => {
             const duvida = palavras.slice(f.inicio, f.fim).some((p) => (p.confidence ?? 1) < 0.6);
+            const fora = Boolean(cortada(f));
             return (
-              <label key={f.inicio} className={`frase ${duvida ? "duvida" : ""}`}>
-                <small>{formatarTempo(palavras[f.inicio].startMs)}</small>
+              <label key={f.inicio} className={`frase ${duvida ? "duvida" : ""} ${fora ? "cortada" : ""}`}>
+                <span className="frase-topo">
+                  <small>{fora ? "cortada do vídeo" : formatarTempo(palavras[f.inicio].startMs)}</small>
+                  <button
+                    type="button"
+                    className="botao pequeno fantasma"
+                    disabled={cortando}
+                    title={fora ? "Põe esta frase de volta no vídeo" : "Tira esta frase do vídeo (dá para voltar depois)"}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      cortar(f);
+                    }}
+                  >
+                    {fora ? "↩ Voltar" : "✂️ Cortar"}
+                  </button>
+                </span>
                 <textarea
                   rows={2}
+                  disabled={fora}
                   value={rascunho[f.inicio] ?? textoDe(f)}
                   onChange={(e) => setRascunho((r) => ({ ...r, [f.inicio]: e.target.value }))}
                   onBlur={() => salvar(fi)}
@@ -240,7 +335,7 @@ const AbaLegenda: React.FC<Props> = ({ props, mudar, arquivos }) => {
         />
       )}
       {arquivos.captions ? (
-        <CorrigirLegenda video={props.video} arquivo={props.captions || props.video.replace(/\.[^./]+$/, "") + ".captions.json"} mudar={mudar} ligada={Boolean(props.captions)} />
+        <CorrigirLegenda props={props} arquivo={props.captions || props.video.replace(/\.[^./]+$/, "") + ".captions.json"} mudar={mudar} ligada={Boolean(props.captions)} />
       ) : null}
       <Secao titulo="Estilo">
         <div className="estilos">
@@ -273,6 +368,14 @@ const AbaLegenda: React.FC<Props> = ({ props, mudar, arquivos }) => {
       </Secao>
       <Secao titulo="Emojis e destaques" dica='Use "Emojis e destaques" na esquerda para a IA escolher. Aqui você pode acrescentar palavras.'>
         <Alternar rotulo="Mostrar emojis" ligado={props.emojis} aoMudar={(v) => mudar({ emojis: v })} />
+        {props.emojis ? (
+          <Alternar
+            rotulo="Emojis animados"
+            dica="Os emojis se mexem (animações do Google). Os que não têm animação aparecem parados."
+            ligado={props.emojiAnimado ?? true}
+            aoMudar={(v) => mudar({ emojiAnimado: v })}
+          />
+        ) : null}
         <div className="chips">
           {props.keywords.map((k) => (
             <span key={k} className="chip">
@@ -316,6 +419,7 @@ const AbaTextos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara })
           <Deslizante rotulo="Duração" valor={props.hookDurationMs} min={1000} max={8000} passo={250} formato={(v) => `${v / 1000}s`} aoMudar={(v) => mudar({ hookDurationMs: v })} />
         ) : null}
       </Secao>
+      <SecaoCartelas props={props} mudar={mudar} arquivos={arquivos} agoraMs={agoraMs} irPara={irPara} />
       <Secao
         titulo="Texto atrás da pessoa"
         acao={<button className="botao pequeno primario" onClick={() => mudar({ behindTexts: [...props.behindTexts, novo()] })}>+ no momento atual</button>}
@@ -498,12 +602,102 @@ const SecaoAnimacoes: React.FC<Props> = ({ props, mudar, agoraMs, irPara }) => {
   );
 };
 
+const nomeCartela = (tipo: Cartela["tipo"]) => TIPOS_CARTELA.find((t) => t.valor === tipo)?.nome ?? tipo;
+
+const DICA_SUBTEXTO: Record<Cartela["tipo"], [string, string]> = {
+  nome: ["Nome", "Cargo ou profissão"],
+  numero: ["Número (ex.: R$ 10.000, 95%)", "Embaixo do número"],
+  digitando: ["Texto", ""],
+  notificacao: ["Mensagem", "Nome do app"],
+};
+
+const SecaoCartelas: React.FC<Props> = ({ props, mudar, agoraMs, irPara }) => {
+  const itens = props.cartelas ?? [];
+  const nova = (): Cartela => ({ tipo: "nome", startMs: Math.round(agoraMs()), ...PADRAO_CARTELA.nome });
+  return (
+    <Secao
+      titulo="Textos animados"
+      dica="Nome e cargo, número contando, texto digitando, notificação do celular. A IA coloca alguns sozinha."
+      acao={<button className="botao pequeno primario" onClick={() => mudar({ cartelas: [...itens, nova()] })}>+ no momento atual</button>}
+    >
+      <Lista<Cartela>
+        itens={itens}
+        titulo={(c) => `${nomeCartela(c.tipo)}: ${c.texto || "(vazio)"}`}
+        resumo={(c) => `${formatarTempo(c.startMs)} · ${c.durationMs / 1000}s`}
+        inicio={(c) => c.startMs}
+        irPara={irPara}
+        aoMudar={(cartelas) => mudar({ cartelas })}
+        editor={(c, m) => (
+          <>
+            <Escolha
+              rotulo="Tipo"
+              valor={c.tipo}
+              opcoes={TIPOS_CARTELA}
+              aoMudar={(tipo) => {
+                // Troca o tipo mantendo o texto que você já escreveu (o texto de exemplo é trocado).
+                const antes = PADRAO_CARTELA[c.tipo];
+                const { texto, subtexto, ...resto } = PADRAO_CARTELA[tipo];
+                m({
+                  tipo,
+                  ...resto,
+                  ...(!c.texto || c.texto === antes.texto ? { texto } : {}),
+                  ...(!c.subtexto || c.subtexto === antes.subtexto ? { subtexto } : {}),
+                });
+              }}
+            />
+            <Texto rotulo={DICA_SUBTEXTO[c.tipo][0]} valor={c.texto} aoMudar={(texto) => m({ texto })} />
+            {DICA_SUBTEXTO[c.tipo][1] ? (
+              <Texto rotulo={DICA_SUBTEXTO[c.tipo][1]} valor={c.subtexto} aoMudar={(subtexto) => m({ subtexto })} />
+            ) : null}
+            <Tempo rotulo="Começa em" ms={c.startMs} aoMudar={(startMs) => m({ startMs })} agoraMs={agoraMs} />
+            <Deslizante rotulo="Duração" valor={c.durationMs} min={1000} max={8000} passo={250} formato={(v) => `${v / 1000}s`} aoMudar={(durationMs) => m({ durationMs })} />
+            <Deslizante rotulo="Posição (altura)" valor={c.y} min={5} max={95} formato={(v) => `${v}%`} aoMudar={(y) => m({ y })} />
+            <Cor rotulo="Cor" valor={c.cor} aoMudar={(cor) => m({ cor })} />
+          </>
+        )}
+      />
+    </Secao>
+  );
+};
+
+const nomeEfeitoTela = (tipo: EfeitoTela["tipo"]) => TIPOS_EFEITO_TELA.find((t) => t.valor === tipo)?.nome ?? tipo;
+
+const SecaoEfeitosTela: React.FC<Props> = ({ props, mudar, agoraMs, irPara }) => {
+  const itens = props.efeitosTela ?? [];
+  const novo = (): EfeitoTela => ({ tipo: "tremor", startMs: Math.round(agoraMs()), durationMs: DURACAO_EFEITO_TELA.tremor, forca: 1 });
+  return (
+    <Secao
+      titulo="Efeitos de cinema"
+      dica="Câmera tremendo, luz de filme, vinheta e preto e branco, num trecho do vídeo."
+      acao={<button className="botao pequeno primario" onClick={() => mudar({ efeitosTela: [...itens, novo()] })}>+ no momento atual</button>}
+    >
+      <Lista<EfeitoTela>
+        itens={itens}
+        titulo={(e) => nomeEfeitoTela(e.tipo)}
+        resumo={(e) => `${formatarTempo(e.startMs)} · ${e.durationMs / 1000}s`}
+        inicio={(e) => e.startMs}
+        irPara={irPara}
+        aoMudar={(efeitosTela) => mudar({ efeitosTela })}
+        editor={(e, m) => (
+          <>
+            <Escolha rotulo="Efeito" valor={e.tipo} opcoes={TIPOS_EFEITO_TELA} aoMudar={(tipo) => m({ tipo, durationMs: DURACAO_EFEITO_TELA[tipo] })} />
+            <Tempo rotulo="Começa em" ms={e.startMs} aoMudar={(startMs) => m({ startMs })} agoraMs={agoraMs} />
+            <Deslizante rotulo="Duração" valor={e.durationMs} min={300} max={10000} passo={100} formato={(v) => `${v / 1000}s`} aoMudar={(durationMs) => m({ durationMs })} />
+            <Deslizante rotulo="Força" valor={e.forca} min={0.2} max={2} passo={0.1} formato={(v) => `${Math.round(v * 100)}%`} aoMudar={(forca) => m({ forca })} />
+          </>
+        )}
+      />
+    </Secao>
+  );
+};
+
 const AbaEfeitos: React.FC<Props> = (p) => {
   const { props, mudar, arquivos, agoraMs, irPara } = p;
   return (
   <>
     <SecaoCor props={props} mudar={mudar} />
     <SecaoAnimacoes {...p} />
+    <SecaoEfeitosTela {...p} />
     <Secao
       titulo="Zoom"
       dica="Aproxima a câmera num momento de ênfase."
@@ -555,6 +749,8 @@ const AbaEfeitos: React.FC<Props> = (p) => {
           { valor: "flash", nome: "Flash branco" },
           { valor: "whip", nome: "Chicote (whip)" },
           { valor: "glitch", nome: "Glitch" },
+          { valor: "luz", nome: "Luz de filme" },
+          { valor: "tremor", nome: "Tranco (câmera treme)" },
           { valor: "none", nome: "Nenhuma" },
         ]}
         aoMudar={(cutTransition) => mudar({ cutTransition })}
@@ -609,11 +805,57 @@ const AbaEfeitos: React.FC<Props> = (p) => {
   );
 };
 
+type MusicaDaBiblioteca = { arquivo: string; nome: string; bpm: number | null; clima: string | null; inicioMs: number; duracaoMs: number | null };
+
 const AbaAudio: React.FC<Props> = ({ props, mudar, arquivos }) => {
-  const [musicas, setMusicas] = useState<string[]>([]);
+  const [biblioteca, setBiblioteca] = useState<MusicaDaBiblioteca[]>([]);
+  const [antigas, setAntigas] = useState<string[]>([]);
+  const [enviando, setEnviando] = useState("");
+  const [trocando, setTrocando] = useState(false);
+  const [erro, setErro] = useState("");
+  const entrada = useRef<HTMLInputElement>(null);
+  const atualizar = () => {
+    get<MusicaDaBiblioteca[]>("/api/musicas").then(setBiblioteca).catch(() => {});
+    // Músicas enviadas antes da biblioteca existir (public/uploads) continuam aparecendo.
+    get<string[]>("/api/uploads").then((l) => setAntigas(l.filter((x) => /\.(mp3|wav|m4a|aac|ogg)$/i.test(x)))).catch(() => {});
+  };
+  useEffect(atualizar, [props.music]);
+  // Enquanto alguma música está sem ritmo calculado, confere de novo daqui a pouco.
   useEffect(() => {
-    get<string[]>("/api/uploads").then((l) => setMusicas(l.filter((x) => /\.(mp3|wav|m4a|aac|ogg)$/i.test(x)))).catch(() => {});
-  }, [props.music]);
+    if (!biblioteca.some((m) => m.bpm === null)) return;
+    const t = setTimeout(atualizar, 3000);
+    return () => clearTimeout(t);
+  }, [biblioteca]);
+
+  const atual = biblioteca.find((m) => m.arquivo === props.music);
+  const trocar = async () => {
+    setTrocando(true);
+    setErro("");
+    try {
+      mudar(await enviar<Partial<ShortVideoProps>>("POST", "/api/musica/trocar", { projeto: props.video, atual: props.music }));
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setTrocando(false);
+    }
+  };
+  const adicionar = async (lista: FileList | null) => {
+    if (!lista?.length) return;
+    setErro("");
+    try {
+      let n = 0;
+      for (const arquivo of Array.from(lista)) {
+        n++;
+        await subirArquivo(arquivo, "musica", (p) => setEnviando(`Enviando ${n} de ${lista.length} (${Math.round(p * 100)}%)`));
+      }
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setEnviando("");
+      atualizar();
+    }
+  };
+
   return (
     <>
       {arquivos.audio ? (
@@ -625,25 +867,118 @@ const AbaAudio: React.FC<Props> = ({ props, mudar, arquivos }) => {
           />
         </Secao>
       ) : null}
-      <Secao titulo="Música de fundo" dica="Toca em loop e abaixa sozinha quando você fala.">
+      <Secao titulo="Música de fundo" dica="Toca em loop e abaixa sozinha quando você fala. O Editar automático escolhe uma de Minhas músicas.">
         <div className="linha-form">
-          <select value={props.music} onChange={(e) => mudar({ music: e.target.value })}>
+          <select
+            value={props.music}
+            onChange={(e) => {
+              const m = biblioteca.find((x) => x.arquivo === e.target.value);
+              mudar({ music: e.target.value, musicInicioMs: m?.inicioMs ?? 0 });
+            }}
+          >
             <option value="">Sem música</option>
-            {musicas.map((m) => (
+            {biblioteca.map((m) => (
+              <option key={m.arquivo} value={m.arquivo}>
+                {m.nome}
+              </option>
+            ))}
+            {antigas.map((m) => (
               <option key={m} value={m}>
                 {m.replace("uploads/", "")}
               </option>
             ))}
           </select>
-          <EnviarArquivo rotulo="Enviar música" aceitar="audio/*" aoEnviar={(music) => mudar({ music })} />
+          <button className="botao secundario" disabled={trocando || !biblioteca.length} onClick={trocar} title="Põe outra música que combina com o vídeo">
+            {trocando ? "..." : "🔀 Trocar"}
+          </button>
         </div>
+        {atual?.bpm ? (
+          <p className="dica">
+            ♪ {Math.round(atual.bpm)} batidas por minuto · {atual.clima}
+          </p>
+        ) : null}
         {props.music ? (
           <>
             <Deslizante rotulo="Volume" valor={props.musicVolume} min={0} max={1} passo={0.05} formato={(v) => `${Math.round(v * 100)}%`} aoMudar={(musicVolume) => mudar({ musicVolume })} />
             <Deslizante rotulo="Volume enquanto você fala" valor={props.duckTo} min={0} max={1} passo={0.05} formato={(v) => `${Math.round(v * 100)}%`} aoMudar={(duckTo) => mudar({ duckTo })} />
+            {atual?.duracaoMs ? (
+              <Deslizante
+                rotulo="Começar a música em"
+                valor={Math.round((props.musicInicioMs ?? 0) / 500) / 2}
+                min={0}
+                max={Math.floor(atual.duracaoMs / 1000)}
+                passo={0.5}
+                formato={(v) => `${v}s`}
+                aoMudar={(v) => mudar({ musicInicioMs: v * 1000 })}
+              />
+            ) : null}
+            {atual?.bpm ? (
+              <>
+                <Alternar
+                  rotulo="Efeitos no ritmo da música"
+                  dica="Zooms, animações, textos e efeitos caem na batida."
+                  ligado={props.noRitmo ?? true}
+                  aoMudar={(noRitmo) => mudar({ noRitmo })}
+                />
+                <Alternar
+                  rotulo="Pulsar na batida"
+                  dica="A imagem dá um pulo leve no ritmo da música."
+                  ligado={props.pulsoBatida ?? false}
+                  aoMudar={(pulsoBatida) => mudar({ pulsoBatida })}
+                />
+              </>
+            ) : null}
           </>
         ) : null}
-        <p className="dica">Músicas liberadas: Biblioteca de Áudio do YouTube ou Pixabay Music.</p>
+        {erro ? <p className="alerta">{erro}</p> : null}
+      </Secao>
+      <Secao
+        titulo="Minhas músicas"
+        dica="Coloque aqui as suas músicas (ex.: feitas no Suno). O Studio descobre o ritmo de cada uma."
+        acao={
+          <button className="botao pequeno primario" disabled={Boolean(enviando)} onClick={() => entrada.current?.click()}>
+            {enviando || "+ Adicionar músicas"}
+          </button>
+        }
+      >
+        <input
+          ref={entrada}
+          type="file"
+          accept="audio/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const lista = e.target.files;
+            adicionar(lista).finally(() => (e.target.value = ""));
+          }}
+        />
+        {biblioteca.length ? (
+          <div className="lista-musicas">
+            {biblioteca.map((m) => (
+              <div key={m.arquivo} className={`musica-item${m.arquivo === props.music ? " atual" : ""}`}>
+                <div>
+                  <b>{m.nome}</b>
+                  <small>{m.bpm ? `${Math.round(m.bpm)} bpm · ${m.clima}` : "analisando o ritmo..."}</small>
+                </div>
+                <button
+                  className="botao pequeno fantasma"
+                  title="Tirar da biblioteca (apaga o arquivo da música)"
+                  onClick={async () => {
+                    if (!window.confirm(`Tirar "${m.nome}" de Minhas músicas? O arquivo da música será apagado.`)) return;
+                    await enviar("DELETE", `/api/musicas?arquivo=${encodeURIComponent(m.arquivo)}`).catch(() => {});
+                    if (m.arquivo === props.music) mudar({ music: "" });
+                    atualizar();
+                  }}
+                >
+                  🗑
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="vazio-lista">Nenhuma música ainda.</p>
+        )}
+        <p className="dica">Use só músicas suas ou liberadas para uso comercial (no Suno, as feitas no plano pago).</p>
       </Secao>
       <Secao titulo="Efeitos sonoros" dica="Whoosh nas transições e no B-roll, pop nos emojis e no gancho.">
         <Alternar rotulo="Ligar efeitos sonoros" ligado={props.sfx} aoMudar={(sfx) => mudar({ sfx })} />
