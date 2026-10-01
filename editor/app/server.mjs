@@ -18,6 +18,7 @@ const REPO_URL = process.env.STUDIO_REPO || "https://github.com/lkuidbr-ctrl/ric
 // Código de saída que avisa o iniciar.ps1: "atualizei, instale o que mudou e me abra de novo".
 const SAIR_PARA_ATUALIZAR = 42;
 const PUBLIC = path.join(EDITOR, "public");
+const MUSICAS = path.join(PUBLIC, "musicas");
 const OUT = path.join(EDITOR, "out");
 const DIST = path.join(APP, "dist");
 const CONFIG = path.join(APP, "config.json");
@@ -363,6 +364,11 @@ const FERRAMENTAS = {
     args: (v, o) => [py("broll.py"), v, ...argsIa(o)],
     campo: "brollFile",
   },
+  musica: {
+    rotulo: "Escolher música",
+    args: (v, o) => [py("musica.py"), "escolher", v, ...argsIa(o)],
+    musica: true,
+  },
   // Cópia leve (960 px de altura) só para o preview; a exportação usa sempre o original.
   preview: {
     rotulo: "Preparar o preview leve",
@@ -494,6 +500,12 @@ const aplicarFerramenta = (projeto, f) => {
     }
     return;
   }
+  if (f.musica) {
+    const cfg = configuracoesDoProjeto(projeto);
+    aplicarMusica(projeto, cfg);
+    salvarConfiguracoes(projeto, cfg);
+    return;
+  }
   if (!f.campo && !f.extra) return;
   const cfg = configuracoesDoProjeto(projeto);
   if (f.campo) cfg[f.campo] = irmao(projeto, GERADOS[f.campo]);
@@ -513,6 +525,8 @@ const rodarAutomatico = (t, projeto, opcoes) => {
   if (!tem(".cor.json")) passos.push("cor");
   passos.push("emojis");
   if (config().pexelsKey || process.env.PEXELS_API_KEY) passos.push("broll");
+  // Música da biblioteca, se tiver músicas e o vídeo ainda não tiver uma.
+  if (musicasDaBiblioteca().length && !configuracoesDoProjeto(projeto).music) passos.push("musica");
   const proximo = (i) => {
     if (t.status === "cancelado") return;
     if (i >= passos.length) {
@@ -536,10 +550,10 @@ const rodarAutomatico = (t, projeto, opcoes) => {
         setImmediate(() => proximo(i + 1));
         return null;
       },
-      // B-roll é um extra: se falhar (internet, Pexels), o resto do vídeo continua pronto.
-      aoFalhar: passos[i] === "broll"
+      // B-roll e música são extras: se falharem (internet, Pexels...), o resto do vídeo continua pronto.
+      aoFalhar: passos[i] === "broll" || passos[i] === "musica"
         ? () => {
-            t.aviso = "o B-roll automático não deu certo desta vez (veja os detalhes). O resto ficou pronto.";
+            t.aviso = `${passos[i] === "broll" ? "o B-roll automático" : "a escolha da música"} não deu certo desta vez (veja os detalhes). O resto ficou pronto.`;
             setImmediate(() => proximo(i + 1));
             return true;
           }
@@ -620,7 +634,7 @@ app.put("/api/projeto", (req, res) => {
 const AJUSTES_DO_PEDIDO = [
   "captionStyle", "captionColor", "highlightColor", "captionY", "wordsWindowMs", "emojis", "emojiAnimado", "keywords",
   "zooms", "cutTransition", "hookText", "hookDurationMs", "behindTexts", "musicVolume", "duckTo", "sfx", "sfxVolume",
-  "cor", "animacoes", "cartelas", "efeitosTela",
+  "cor", "animacoes", "cartelas", "efeitosTela", "noRitmo", "pulsoBatida", "musicInicioMs",
 ];
 
 // Legenda em frases com o tempo do vídeo editado, para a IA saber o que é dito e quando.
@@ -746,13 +760,13 @@ app.delete("/api/projeto", (req, res) => {
 const upload = multer({
   storage: multer.diskStorage({
     destination: (req, _file, cb) => {
-      const pasta = req.query.tipo === "video" ? PUBLIC : path.join(PUBLIC, "uploads");
+      const pasta = req.query.tipo === "video" ? PUBLIC : req.query.tipo === "musica" ? MUSICAS : path.join(PUBLIC, "uploads");
       fs.mkdirSync(pasta, { recursive: true });
       cb(null, pasta);
     },
     filename: (req, file, cb) => {
       const original = Buffer.from(file.originalname, "latin1").toString("utf-8");
-      const pasta = req.query.tipo === "video" ? PUBLIC : path.join(PUBLIC, "uploads");
+      const pasta = req.query.tipo === "video" ? PUBLIC : req.query.tipo === "musica" ? MUSICAS : path.join(PUBLIC, "uploads");
       cb(null, semColisao(pasta, nomeSeguro(original)));
     },
   }),
@@ -760,6 +774,10 @@ const upload = multer({
 app.post("/api/upload", upload.single("arquivo"), (req, res) => {
   if (!req.file) return res.status(400).json({ erro: "nenhum arquivo" });
   const caminho = relPublic(req.file.path);
+  if (req.query.tipo === "musica") {
+    analisarMusicas();
+    return res.json({ caminho });
+  }
   if (req.query.tipo !== "video" || !precisaConverter(req.file.path)) return res.json({ caminho });
 
   // Converte para um formato que qualquer navegador toca, com barra de progresso.
@@ -785,6 +803,93 @@ app.get("/api/uploads", (_req, res) => {
   const pasta = path.join(PUBLIC, "uploads");
   const itens = fs.existsSync(pasta) ? fs.readdirSync(pasta).map((n) => `uploads/${n}`) : [];
   res.json(itens);
+});
+
+// ------------------------------------------------------------------ Minhas músicas
+// As músicas do usuário (ex.: feitas no Suno) ficam em public/musicas/. O musica.py descobre o ritmo
+// de cada uma (<música>.ritmo.json) e escolhe a que combina com cada vídeo.
+const EXT_MUSICA = /\.(mp3|wav|m4a|aac|ogg|flac|opus)$/i;
+const HISTORICO_MUSICAS = path.join(MUSICAS, ".historico.json");
+const musicasDaBiblioteca = () =>
+  fs.existsSync(MUSICAS) ? fs.readdirSync(MUSICAS).filter((n) => EXT_MUSICA.test(n) && !n.startsWith(".")).sort() : [];
+const ritmoDa = (nome) => lerJson(path.join(MUSICAS, `${nome}.ritmo.json`), null);
+const marcarMusicaUsada = (arquivo) => {
+  const nome = path.basename(arquivo);
+  const historico = lerJson(HISTORICO_MUSICAS, []).filter((n) => n !== nome);
+  salvarJson(HISTORICO_MUSICAS, [...historico, nome].slice(-30));
+};
+
+// Analisa (em segundo plano) as músicas que ainda não têm o ritmo calculado.
+let analisandoMusicas = false;
+const analisarMusicas = () => {
+  if (analisandoMusicas) return;
+  const faltam = musicasDaBiblioteca().filter((n) => !fs.existsSync(path.join(MUSICAS, `${n}.ritmo.json`)));
+  if (!faltam.length) return;
+  analisandoMusicas = true;
+  const proc = spawn(pythonExe(), [py("musica.py"), "analisar", ...faltam.map((n) => path.join(MUSICAS, n))], {
+    cwd: EDITOR,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+    windowsHide: true,
+  });
+  proc.stdout.on("data", (d) => process.stdout.write(d));
+  proc.on("close", () => {
+    analisandoMusicas = false;
+    // Chegou outra música enquanto analisava: analisa ela também.
+    if (musicasDaBiblioteca().some((n) => !fs.existsSync(path.join(MUSICAS, `${n}.ritmo.json`)))) setTimeout(analisarMusicas, 500);
+  });
+  proc.on("error", () => (analisandoMusicas = false));
+};
+
+app.get("/api/musicas", (_req, res) => {
+  analisarMusicas();
+  res.json(
+    musicasDaBiblioteca().map((nome) => {
+      const r = ritmoDa(nome);
+      return {
+        arquivo: `musicas/${nome}`,
+        nome: nome.replace(EXT_MUSICA, "").replace(/[-_]+/g, " "),
+        bpm: r?.bpm ?? null,
+        clima: r?.clima ?? null,
+        inicioMs: r?.inicioMs ?? 0,
+        duracaoMs: r?.duracaoMs ?? null,
+      };
+    }),
+  );
+});
+
+app.delete("/api/musicas", (req, res) => {
+  const nome = path.basename(String(req.query.arquivo || ""));
+  const abs = path.join(MUSICAS, nome);
+  if (!EXT_MUSICA.test(nome) || !fs.existsSync(abs)) return res.status(404).json({ erro: "música não encontrada" });
+  fs.rmSync(abs, { force: true });
+  fs.rmSync(path.join(MUSICAS, `${nome}.ritmo.json`), { force: true });
+  res.json({ ok: true });
+});
+
+// Música escolhida para o vídeo: a primeira da fila do musica.py, começando na parte boa.
+const aplicarMusica = (projeto, cfg) => {
+  const escolha = lerJson(noPublic(irmao(projeto, ".musica.json")), null);
+  const primeira = escolha?.opcoes?.find((m) => fs.existsSync(noPublic(m)));
+  if (!primeira) return;
+  cfg.music = primeira;
+  cfg.musicInicioMs = escolha.inicios?.[primeira] ?? ritmoDa(path.basename(primeira))?.inicioMs ?? 0;
+  marcarMusicaUsada(primeira);
+};
+
+// Botão "Trocar": a próxima da fila da IA (ou, sem fila, a menos usada da biblioteca).
+app.post("/api/musica/trocar", (req, res) => {
+  const { projeto, atual } = req.body || {};
+  const fila = (lerJson(noPublic(irmao(String(projeto || ""), ".musica.json")), {})?.opcoes || []).filter((m) => fs.existsSync(noPublic(m)));
+  const historico = lerJson(HISTORICO_MUSICAS, []);
+  const biblioteca = musicasDaBiblioteca()
+    .map((n) => `musicas/${n}`)
+    .sort((a, b) => historico.indexOf(path.basename(a)) - historico.indexOf(path.basename(b)));
+  const ordem = [...new Set([...fila, ...biblioteca])];
+  if (!ordem.length) return res.status(400).json({ erro: "Coloque músicas em Minhas músicas primeiro." });
+  const i = ordem.indexOf(atual);
+  const proxima = ordem[(i + 1) % ordem.length];
+  marcarMusicaUsada(proxima);
+  res.json({ music: proxima, musicInicioMs: ritmoDa(path.basename(proxima))?.inicioMs ?? 0 });
 });
 
 // Ferramentas de IA

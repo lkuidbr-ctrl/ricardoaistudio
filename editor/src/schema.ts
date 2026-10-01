@@ -130,6 +130,12 @@ export const shortVideoSchema = z.object({
   audio: z.string(),
   // Música de fundo (mp3/wav em public/). Vazio = sem música.
   music: z.string(),
+  // Onde a música começa a tocar (ms dentro da música; pula a introdução).
+  musicInicioMs: z.number().min(0),
+  // Zooms, animações, textos e efeitos caem na batida da música (precisa da análise do ritmo).
+  noRitmo: z.boolean(),
+  // A imagem dá um "pulo" leve a cada duas batidas.
+  pulsoBatida: z.boolean(),
   musicVolume: z.number().min(0).max(1),
   // Volume da música enquanto você fala, como fração do normal (0.3 = 30%).
   duckTo: z.number().min(0).max(1),

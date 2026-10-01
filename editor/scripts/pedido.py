@@ -34,7 +34,9 @@ Ajustes que você pode mudar (use exatamente estes nomes e formatos):
 - behindTexts: lista de textos atrás da pessoa: {"text", "startMs", "durationMs", "animation"
   ("rise", "scale", "slide" ou "letters"), "color" "#RRGGBB", "y" (0 a 100), "fontSize" (40 a 600)}.
 - musicVolume (0 a 1), duckTo (0 a 1: volume da música enquanto a pessoa fala), sfx (true/false),
-  sfxVolume (0 a 1).
+  sfxVolume (0 a 1). musicInicioMs: em que ponto da música ela começa a tocar (ms). noRitmo (true/false:
+  efeitos caem na batida da música), pulsoBatida (true/false: a imagem pulsa no ritmo). Para trocar a
+  música em si, diga para usar o botão "Trocar" na aba Áudio.
 - animacoes: lista de animações por cima do vídeo: {"tipo" (um de "seta", "circulo", "sublinhado", "check",
   "xis", "explosao", "coracao", "like", "fogo", "dinheiro", "confete", "brilhos"), "startMs" (tempo do vídeo
   editado), "durationMs" (300 a 5000), "x" e "y" (centro, em % da tela; y 20 = acima da cabeça), "tamanho"

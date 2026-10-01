@@ -24,6 +24,7 @@ import {
   type CutsFile,
   type EnrichedCaption,
 } from "./timeline";
+import { batidasNoVideo, naBatida, type Ritmo } from "./ritmo";
 import { useJson } from "./useJson";
 
 // Camadas, de baixo para cima:
@@ -65,6 +66,27 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     [timeline, captions, fps],
   );
 
+  // Ritmo da música: os efeitos caem na batida mais próxima (até 0,22 s de diferença).
+  const ritmo = useJson<Ritmo>(props.music && (props.noRitmo || props.pulsoBatida) ? `${props.music}.ritmo.json` : "");
+  const batidas = useMemo(
+    () => (ritmo ? batidasNoVideo(ritmo, props.musicInicioMs ?? 0, (durationInFrames / fps) * 1000) : []),
+    [ritmo, props.musicInicioMs, durationInFrames, fps],
+  );
+  const ef = useMemo(() => {
+    const noTempo = props.noRitmo && batidas.length ? (ms: number) => naBatida(ms, batidas) : (ms: number) => ms;
+    return {
+      zooms: props.zooms.map((z) => ({ ...z, atMs: noTempo(z.atMs) })),
+      animacoes: (props.animacoes ?? []).map((a) => ({ ...a, startMs: noTempo(a.startMs) })),
+      cartelas: (props.cartelas ?? []).map((c) => ({ ...c, startMs: noTempo(c.startMs) })),
+      efeitosTela: (props.efeitosTela ?? []).map((e) => ({ ...e, startMs: noTempo(e.startMs) })),
+    };
+  }, [props.noRitmo, batidas, props.zooms, props.animacoes, props.cartelas, props.efeitosTela]);
+  // Pulso: a cada duas batidas (o "tum" mais forte da maioria das músicas).
+  const pulsos = useMemo(
+    () => (props.pulsoBatida ? batidas.filter((_, i) => i % 2 === 0).map((b) => Math.round((b / 1000) * fps)) : []),
+    [props.pulsoBatida, batidas, fps],
+  );
+
   const broll = useMemo(
     () => [...props.broll, ...(autoBroll ? remapBroll(autoBroll, timeline) : [])],
     [props.broll, autoBroll, timeline],
@@ -79,16 +101,16 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
     if (props.emojis) for (const c of captions ?? []) if (c.emoji) events.push({ frame: at(c.startMs), name: "pop" });
     for (const b of broll) events.push({ frame: at(b.startMs), name: b.transition === "glitch" ? "glitch" : "whoosh" });
     for (const t of props.behindTexts) events.push({ frame: at(t.startMs), name: "swoosh" });
-    for (const a of props.animacoes ?? []) events.push({ frame: at(a.startMs), name: a.tipo === "explosao" ? "whoosh" : "pop" });
-    for (const c of props.cartelas ?? []) events.push({ frame: at(c.startMs), name: c.tipo === "nome" ? "swoosh" : "pop" });
-    for (const e of props.efeitosTela ?? []) if (e.tipo === "tremor" || e.tipo === "luz") events.push({ frame: at(e.startMs), name: "whoosh" });
+    for (const a of ef.animacoes) events.push({ frame: at(a.startMs), name: a.tipo === "explosao" ? "whoosh" : "pop" });
+    for (const c of ef.cartelas) events.push({ frame: at(c.startMs), name: c.tipo === "nome" ? "swoosh" : "pop" });
+    for (const e of ef.efeitosTela) if (e.tipo === "tremor" || e.tipo === "luz") events.push({ frame: at(e.startMs), name: "whoosh" });
     if (props.hookText) events.push({ frame: 1, name: "pop" });
     if (ctaFrames > 0) {
       events.push({ frame: durationInFrames - ctaFrames, name: "whoosh" });
       events.push({ frame: durationInFrames - ctaFrames + 38, name: "pop" }); // "clique" no seguir
     }
     return events;
-  }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, props.animacoes, props.cartelas, props.efeitosTela, props.hookText, joins, captions, broll]);
+  }, [fps, durationInFrames, ctaFrames, props.cutTransition, props.emojis, props.behindTexts, ef, props.hookText, joins, captions, broll]);
 
   // No preview usa a cópia leve (se houver); na exportação, sempre o vídeo original.
   const renderizando = getRemotionEnvironment().isRendering;
@@ -98,12 +120,13 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
   // ser barrado pelo navegador, e aí o player silencia aquele vídeo de vez.
   const somDaFala = props.audio || (renderizando ? "" : fonte);
 
+  // O ritmo não segura a tela: trocar de música não pode desmontar o vídeo (o som pararia).
   if (cuts === undefined || brand === undefined) return null;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      <TelaComEfeitos itens={props.efeitosTela ?? []}>
-        <AutoZoom zooms={props.zooms}>
+      <TelaComEfeitos itens={ef.efeitosTela} pulsos={pulsos}>
+        <AutoZoom zooms={ef.zooms}>
           <CutTransition kind={props.cutTransition} joins={joins}>
             {props.video ? (
               <ComCor cor={props.cor} id="cor-video">
@@ -153,10 +176,10 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
         </Sequence>
       ))}
 
-      <LuzesDaTela itens={props.efeitosTela ?? []} />
+      <LuzesDaTela itens={ef.efeitosTela} />
 
-      {props.animacoes?.length ? <Animacoes itens={props.animacoes} /> : null}
-      {props.cartelas?.length ? <Cartelas itens={props.cartelas} /> : null}
+      {ef.animacoes.length ? <Animacoes itens={ef.animacoes} /> : null}
+      {ef.cartelas.length ? <Cartelas itens={ef.cartelas} /> : null}
 
       {captions ? <Captions captions={captions} props={captionProps} /> : null}
 
@@ -182,7 +205,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
       {somDaFala ? <CutAudio src={somDaFala} timeline={timeline} /> : null}
 
       {props.music ? (
-        <Music src={props.music} volume={props.musicVolume} duckTo={props.duckTo} speech={captions ?? []} />
+        <Music src={props.music} inicioMs={props.musicInicioMs ?? 0} volume={props.musicVolume} duckTo={props.duckTo} speech={captions ?? []} />
       ) : null}
       {props.sfx ? <SoundEffects events={sfxEvents} volume={props.sfxVolume} /> : null}
     </AbsoluteFill>

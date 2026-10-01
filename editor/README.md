@@ -330,6 +330,7 @@ scripts/
   broll.py              B-roll automático com clipes grátis do Pexels
   _ia.py                chamadas de IA compartilhadas (Claude via login OAuth / Ollama)
   gerar_sfx.py          sintetiza os efeitos sonoros de public/sfx/ (sem direito autoral)
+  musica.py             Minhas músicas: ritmo de cada música e escolha da música de cada vídeo
   segment.py            MODNet -> pessoa com fundo transparente
 ```
 

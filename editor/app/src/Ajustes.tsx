@@ -4,7 +4,7 @@ import type { Animacao, Broll, BehindText, CaptionStyle, Cartela, EfeitoTela, Sh
 import { COR_ANIMACAO, TIPOS_ANIMACAO } from "../../src/effects/Animacoes";
 import { PADRAO_CARTELA, TIPOS_CARTELA } from "../../src/effects/Cartelas";
 import { DURACAO_EFEITO_TELA, TIPOS_EFEITO_TELA } from "../../src/effects/EfeitosTela";
-import { enviar, formatarTempo, get, type Arquivos } from "./api";
+import { enviar, formatarTempo, get, subirArquivo, type Arquivos } from "./api";
 import { Alternar, Cor, Deslizante, EnviarArquivo, Escolha, Linha, Secao, Texto } from "./campos";
 
 type Props = {
@@ -712,11 +712,57 @@ const AbaEfeitos: React.FC<Props> = (p) => {
   );
 };
 
+type MusicaDaBiblioteca = { arquivo: string; nome: string; bpm: number | null; clima: string | null; inicioMs: number; duracaoMs: number | null };
+
 const AbaAudio: React.FC<Props> = ({ props, mudar, arquivos }) => {
-  const [musicas, setMusicas] = useState<string[]>([]);
+  const [biblioteca, setBiblioteca] = useState<MusicaDaBiblioteca[]>([]);
+  const [antigas, setAntigas] = useState<string[]>([]);
+  const [enviando, setEnviando] = useState("");
+  const [trocando, setTrocando] = useState(false);
+  const [erro, setErro] = useState("");
+  const entrada = useRef<HTMLInputElement>(null);
+  const atualizar = () => {
+    get<MusicaDaBiblioteca[]>("/api/musicas").then(setBiblioteca).catch(() => {});
+    // Músicas enviadas antes da biblioteca existir (public/uploads) continuam aparecendo.
+    get<string[]>("/api/uploads").then((l) => setAntigas(l.filter((x) => /\.(mp3|wav|m4a|aac|ogg)$/i.test(x)))).catch(() => {});
+  };
+  useEffect(atualizar, [props.music]);
+  // Enquanto alguma música está sem ritmo calculado, confere de novo daqui a pouco.
   useEffect(() => {
-    get<string[]>("/api/uploads").then((l) => setMusicas(l.filter((x) => /\.(mp3|wav|m4a|aac|ogg)$/i.test(x)))).catch(() => {});
-  }, [props.music]);
+    if (!biblioteca.some((m) => m.bpm === null)) return;
+    const t = setTimeout(atualizar, 3000);
+    return () => clearTimeout(t);
+  }, [biblioteca]);
+
+  const atual = biblioteca.find((m) => m.arquivo === props.music);
+  const trocar = async () => {
+    setTrocando(true);
+    setErro("");
+    try {
+      mudar(await enviar<Partial<ShortVideoProps>>("POST", "/api/musica/trocar", { projeto: props.video, atual: props.music }));
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setTrocando(false);
+    }
+  };
+  const adicionar = async (lista: FileList | null) => {
+    if (!lista?.length) return;
+    setErro("");
+    try {
+      let n = 0;
+      for (const arquivo of Array.from(lista)) {
+        n++;
+        await subirArquivo(arquivo, "musica", (p) => setEnviando(`Enviando ${n} de ${lista.length} (${Math.round(p * 100)}%)`));
+      }
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setEnviando("");
+      atualizar();
+    }
+  };
+
   return (
     <>
       {arquivos.audio ? (
@@ -728,25 +774,118 @@ const AbaAudio: React.FC<Props> = ({ props, mudar, arquivos }) => {
           />
         </Secao>
       ) : null}
-      <Secao titulo="Música de fundo" dica="Toca em loop e abaixa sozinha quando você fala.">
+      <Secao titulo="Música de fundo" dica="Toca em loop e abaixa sozinha quando você fala. O Editar automático escolhe uma de Minhas músicas.">
         <div className="linha-form">
-          <select value={props.music} onChange={(e) => mudar({ music: e.target.value })}>
+          <select
+            value={props.music}
+            onChange={(e) => {
+              const m = biblioteca.find((x) => x.arquivo === e.target.value);
+              mudar({ music: e.target.value, musicInicioMs: m?.inicioMs ?? 0 });
+            }}
+          >
             <option value="">Sem música</option>
-            {musicas.map((m) => (
+            {biblioteca.map((m) => (
+              <option key={m.arquivo} value={m.arquivo}>
+                {m.nome}
+              </option>
+            ))}
+            {antigas.map((m) => (
               <option key={m} value={m}>
                 {m.replace("uploads/", "")}
               </option>
             ))}
           </select>
-          <EnviarArquivo rotulo="Enviar música" aceitar="audio/*" aoEnviar={(music) => mudar({ music })} />
+          <button className="botao secundario" disabled={trocando || !biblioteca.length} onClick={trocar} title="Põe outra música que combina com o vídeo">
+            {trocando ? "..." : "🔀 Trocar"}
+          </button>
         </div>
+        {atual?.bpm ? (
+          <p className="dica">
+            ♪ {Math.round(atual.bpm)} batidas por minuto · {atual.clima}
+          </p>
+        ) : null}
         {props.music ? (
           <>
             <Deslizante rotulo="Volume" valor={props.musicVolume} min={0} max={1} passo={0.05} formato={(v) => `${Math.round(v * 100)}%`} aoMudar={(musicVolume) => mudar({ musicVolume })} />
             <Deslizante rotulo="Volume enquanto você fala" valor={props.duckTo} min={0} max={1} passo={0.05} formato={(v) => `${Math.round(v * 100)}%`} aoMudar={(duckTo) => mudar({ duckTo })} />
+            {atual?.duracaoMs ? (
+              <Deslizante
+                rotulo="Começar a música em"
+                valor={Math.round((props.musicInicioMs ?? 0) / 500) / 2}
+                min={0}
+                max={Math.floor(atual.duracaoMs / 1000)}
+                passo={0.5}
+                formato={(v) => `${v}s`}
+                aoMudar={(v) => mudar({ musicInicioMs: v * 1000 })}
+              />
+            ) : null}
+            {atual?.bpm ? (
+              <>
+                <Alternar
+                  rotulo="Efeitos no ritmo da música"
+                  dica="Zooms, animações, textos e efeitos caem na batida."
+                  ligado={props.noRitmo ?? true}
+                  aoMudar={(noRitmo) => mudar({ noRitmo })}
+                />
+                <Alternar
+                  rotulo="Pulsar na batida"
+                  dica="A imagem dá um pulo leve no ritmo da música."
+                  ligado={props.pulsoBatida ?? false}
+                  aoMudar={(pulsoBatida) => mudar({ pulsoBatida })}
+                />
+              </>
+            ) : null}
           </>
         ) : null}
-        <p className="dica">Músicas liberadas: Biblioteca de Áudio do YouTube ou Pixabay Music.</p>
+        {erro ? <p className="alerta">{erro}</p> : null}
+      </Secao>
+      <Secao
+        titulo="Minhas músicas"
+        dica="Coloque aqui as suas músicas (ex.: feitas no Suno). O Studio descobre o ritmo de cada uma."
+        acao={
+          <button className="botao pequeno primario" disabled={Boolean(enviando)} onClick={() => entrada.current?.click()}>
+            {enviando || "+ Adicionar músicas"}
+          </button>
+        }
+      >
+        <input
+          ref={entrada}
+          type="file"
+          accept="audio/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const lista = e.target.files;
+            adicionar(lista).finally(() => (e.target.value = ""));
+          }}
+        />
+        {biblioteca.length ? (
+          <div className="lista-musicas">
+            {biblioteca.map((m) => (
+              <div key={m.arquivo} className={`musica-item${m.arquivo === props.music ? " atual" : ""}`}>
+                <div>
+                  <b>{m.nome}</b>
+                  <small>{m.bpm ? `${Math.round(m.bpm)} bpm · ${m.clima}` : "analisando o ritmo..."}</small>
+                </div>
+                <button
+                  className="botao pequeno fantasma"
+                  title="Tirar da biblioteca (apaga o arquivo da música)"
+                  onClick={async () => {
+                    if (!window.confirm(`Tirar "${m.nome}" de Minhas músicas? O arquivo da música será apagado.`)) return;
+                    await enviar("DELETE", `/api/musicas?arquivo=${encodeURIComponent(m.arquivo)}`).catch(() => {});
+                    if (m.arquivo === props.music) mudar({ music: "" });
+                    atualizar();
+                  }}
+                >
+                  🗑
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="vazio-lista">Nenhuma música ainda.</p>
+        )}
+        <p className="dica">Use só músicas suas ou liberadas para uso comercial (no Suno, as feitas no plano pago).</p>
       </Secao>
       <Secao titulo="Efeitos sonoros" dica="Whoosh nas transições e no B-roll, pop nos emojis e no gancho.">
         <Alternar rotulo="Ligar efeitos sonoros" ligado={props.sfx} aoMudar={(sfx) => mudar({ sfx })} />

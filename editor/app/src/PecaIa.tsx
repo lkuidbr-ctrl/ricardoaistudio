@@ -8,7 +8,7 @@ import type { Ia } from "./Ferramentas";
 const PERMITIDOS = {
   captionStyle: true, captionColor: true, highlightColor: true, captionY: true, wordsWindowMs: true, emojis: true, emojiAnimado: true,
   keywords: true, zooms: true, cutTransition: true, hookText: true, hookDurationMs: true, behindTexts: true,
-  musicVolume: true, duckTo: true, sfx: true, sfxVolume: true, cor: true, animacoes: true, cartelas: true, efeitosTela: true,
+  musicVolume: true, duckTo: true, sfx: true, sfxVolume: true, cor: true, animacoes: true, cartelas: true, efeitosTela: true, noRitmo: true, pulsoBatida: true, musicInicioMs: true,
 } as const;
 const esquema = shortVideoSchema.pick(PERMITIDOS).partial();
 

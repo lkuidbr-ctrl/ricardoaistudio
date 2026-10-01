@@ -62,17 +62,25 @@ const useForcas = (itens: EfeitoTela[]) => {
   return { frame, f, tremorDesde };
 };
 
-// Em volta do vídeo: tremor e preto e branco.
-export const TelaComEfeitos: React.FC<{ itens: EfeitoTela[]; children: React.ReactNode }> = ({ itens, children }) => {
+// Em volta do vídeo: tremor, preto e branco e o pulso na batida da música.
+export const TelaComEfeitos: React.FC<{ itens: EfeitoTela[]; pulsos?: number[]; children: React.ReactNode }> = ({
+  itens,
+  pulsos = [],
+  children,
+}) => {
   const { frame, f, tremorDesde } = useForcas(itens);
   const t = tremor(frame - tremorDesde, f.tremor);
   // Zoom só o bastante para o tremor não mostrar borda preta.
   const cobre = f.tremor > 0 ? 1 + (2 * Math.max(Math.abs(t.x), Math.abs(t.y))) / 1080 : 1;
+  // Pulso: aproxima 2,5% na batida e volta em ~0,2 s.
+  const ultimo = pulsos.findLast((p) => p <= frame);
+  const pulso = ultimo === undefined ? 1 : 1 + 0.025 * Math.exp(-(frame - ultimo) / 2.5);
+  const escala = cobre * pulso;
   return (
     <AbsoluteFill
       style={{
         overflow: "hidden",
-        transform: f.tremor > 0 ? `translate(${t.x}px, ${t.y}px) scale(${cobre})` : undefined,
+        transform: f.tremor > 0 || escala !== 1 ? `translate(${t.x}px, ${t.y}px) scale(${escala})` : undefined,
         filter: f.pretoBranco > 0 ? `grayscale(${Math.min(1, f.pretoBranco)}) contrast(${1 + 0.15 * Math.min(1, f.pretoBranco)})` : undefined,
       }}
     >
