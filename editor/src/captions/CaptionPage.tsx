@@ -2,6 +2,7 @@ import type { TikTokPage, TikTokToken } from "@remotion/captions";
 import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { anton, bebas, montserrat, poppins } from "../fonts";
+import { EmojiAnimado } from "./EmojiAnimado";
 import type { CaptionStyle } from "../schema";
 
 export type CaptionLook = {
@@ -12,6 +13,7 @@ export type CaptionLook = {
   keywords: Set<string>;
   highlightAt: Set<number>; // início (ms) das palavras marcadas pelo enrich.py
   emojiAt: Map<number, string>; // início (ms) da palavra -> emoji
+  emojiAnimado: boolean;
 };
 
 export const normalizeWord = (w: string) =>
@@ -221,7 +223,7 @@ const Emoji: React.FC<{ page: TikTokPage; look: CaptionLook; nowMs: number; font
         filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.45))",
       }}
     >
-      {look.emojiAt.get(token.fromMs)}
+      <EmojiAnimado emoji={look.emojiAt.get(token.fromMs)!} tamanho={150} animado={look.emojiAnimado} />
     </div>
   );
 };

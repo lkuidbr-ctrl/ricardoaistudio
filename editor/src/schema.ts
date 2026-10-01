@@ -113,6 +113,8 @@ export const shortVideoSchema = z.object({
   keywords: z.array(z.string()),
   // Mostrar os emojis escolhidos pelo scripts/enrich.py.
   emojis: z.boolean(),
+  // Emojis que se mexem (Noto Animated Emoji, do Google). Desligado = emojis parados.
+  emojiAnimado: z.boolean(),
   zooms: z.array(zoomSchema),
   // Efeito em cada emenda do corte de silêncios (precisa do campo cuts).
   cutTransition: z.enum(cutTransitions),

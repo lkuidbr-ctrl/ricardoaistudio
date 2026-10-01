@@ -27,7 +27,10 @@ Escolha:
    palavras fortes, nomes). Cerca de 1 a cada 6 palavras. Nunca artigos, preposições ou pronomes.
 2. "emojis": emojis para algumas palavras-chave (cerca de 1 a cada 10 palavras), sempre
    um único emoji que combine com o sentido da palavra no contexto da frase.
-   Não repita o mesmo emoji em palavras vizinhas.
+   Não repita o mesmo emoji em palavras vizinhas. Prefira estes, que se mexem no vídeo:
+   💸🤑📈📉📊🛒🏆🎯💡🧠📚✅❌⚠️👀🔥🚀⚡⏰❤️💔😄😂🤯😱😢😡🙏👍👎👏💪🤝🏠🚗✈️🌎🎉🎊🥳✨⭐🌟💎👑
+   🤔🤫😎😍🥰😭😅🙌👋👉👆💯🎬📸💬➕🆓🩺🍔💥💣⏳⌛🔔📣😴😬🤩😤🫶❗❓‼️🎁🔒📦🌈⚽🍀
+   (para dinheiro, use 💸 ou 🤑).
 3. "zooms": momentos para aproximar a câmera, na palavra de maior impacto de uma frase
    (revelação, número, promessa, virada). Cerca de 1 a cada 5 a 8 segundos, nunca dois com
    menos de 3 segundos entre eles e nunca nos 2 primeiros segundos. "forte": true só nos 1 ou 2
@@ -126,13 +129,13 @@ SCHEMA = {
 
 # Dicionário para o modo sem IA: raiz da palavra (sem acento) -> emoji.
 DICIONARIO = {
-    "dinheir": "💰", "grana": "💰", "reais": "💵", "lucr": "📈", "venda": "🛒", "vend": "🛒",
-    "ganh": "🤑", "rico": "🤑", "milh": "💸", "mil": "💸", "caro": "💸", "barat": "🏷️", "gratis": "🆓",
+    "dinheir": "💸", "grana": "💸", "reais": "💸", "lucr": "📈", "venda": "🛒", "vend": "🛒",
+    "ganh": "🤑", "rico": "🤑", "milh": "💸", "mil": "💸", "caro": "💸", "barat": "🛒", "gratis": "🆓",
     "viral": "🚀", "virais": "🚀", "cresc": "📈", "result": "📊", "sucesso": "🏆", "venc": "🏆", "meta": "🎯",
     "objetivo": "🎯", "foco": "🎯", "ideia": "💡", "dica": "💡", "segredo": "🤫", "aprend": "🧠", "estud": "📚",
-    "facil": "✅", "rapid": "⚡", "tempo": "⏰", "hoje": "📅", "agora": "⏰", "fogo": "🔥", "incrivel": "🤯",
+    "facil": "✅", "rapid": "⚡", "tempo": "⏰", "hoje": "⏰", "agora": "⏰", "fogo": "🔥", "incrivel": "🤯",
     "insano": "🤯", "loucura": "🤯", "amor": "❤️", "ama": "❤️", "feliz": "😄", "triste": "😢", "medo": "😱",
-    "erro": "❌", "errad": "❌", "nunca": "🚫", "problema": "⚠️", "cuidado": "⚠️", "atencao": "👀", "olha": "👀",
+    "erro": "❌", "errad": "❌", "nunca": "❌", "problema": "⚠️", "cuidado": "⚠️", "atencao": "👀", "olha": "👀",
     "video": "🎬", "videos": "🎬", "celular": "📱", "instagram": "📸", "tiktok": "🎵", "youtube": "▶️",
     "trabalh": "💼", "empresa": "🏢", "negocio": "💼", "cliente": "🤝", "comida": "🍔", "academia": "💪",
     "treino": "💪", "forte": "💪", "saude": "🩺", "casa": "🏠", "carro": "🚗", "viagem": "✈️", "mundo": "🌎",

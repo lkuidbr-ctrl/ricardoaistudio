@@ -275,6 +275,14 @@ const AbaLegenda: React.FC<Props> = ({ props, mudar, arquivos }) => {
       </Secao>
       <Secao titulo="Emojis e destaques" dica='Use "Emojis e destaques" na esquerda para a IA escolher. Aqui você pode acrescentar palavras.'>
         <Alternar rotulo="Mostrar emojis" ligado={props.emojis} aoMudar={(v) => mudar({ emojis: v })} />
+        {props.emojis ? (
+          <Alternar
+            rotulo="Emojis animados"
+            dica="Os emojis se mexem (animações do Google). Os que não têm animação aparecem parados."
+            ligado={props.emojiAnimado ?? true}
+            aoMudar={(v) => mudar({ emojiAnimado: v })}
+          />
+        ) : null}
         <div className="chips">
           {props.keywords.map((k) => (
             <span key={k} className="chip">

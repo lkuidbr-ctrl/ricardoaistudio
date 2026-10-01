@@ -35,6 +35,7 @@ export const Captions: React.FC<{ captions: EnrichedCaption[]; props: ShortVideo
     keywords: new Set(props.keywords.map(normalizeWord)),
     highlightAt,
     emojiAt,
+    emojiAnimado: props.emojiAnimado ?? true,
   };
 
   return (

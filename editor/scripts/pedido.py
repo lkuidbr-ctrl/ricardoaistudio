@@ -24,7 +24,7 @@ Ajustes que você pode mudar (use exatamente estes nomes e formatos):
 - captionColor / highlightColor: cor do texto e do destaque da legenda, em "#RRGGBB".
 - captionY: altura da legenda na tela, em % (0 = topo, 100 = base). Padrão perto de 72.
 - wordsWindowMs: quantas palavras por tela (0 = uma por vez, 1200 = frases, até 2500).
-- emojis: true/false (mostrar os emojis da legenda).
+- emojis: true/false (mostrar os emojis da legenda). emojiAnimado: true/false (emojis que se mexem).
 - keywords: lista de palavras que ganham destaque na legenda.
 - zooms: lista de {"atMs", "durationMs", "scale"}; atMs em milissegundos do vídeo JÁ EDITADO
   (o tempo que aparece no player), scale de 1.05 a 1.6.

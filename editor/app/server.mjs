@@ -483,6 +483,7 @@ const aplicarEdicaoIa = (projeto, cfg) => {
 
 // O que cada ferramenta muda no projeto quando termina.
 const aplicarFerramenta = (projeto, f) => {
+  garantirEmojisAnimados(projeto);
   if (f.cor) {
     // A cor sugerida vira o ajuste de cor do projeto (dá para mexer depois na aba Efeitos).
     const cor = lerJson(noPublic(irmao(projeto, ".cor.json")), null);
@@ -552,6 +553,49 @@ const precisaLegenda = new Set(["cortar", "emojis", "broll", "clipes", "dublar"]
 
 // ------------------------------------------------------------------ servidor
 
+// ------------------------------------------------------------------ emojis animados
+// Animação de cada emoji usado na legenda (Noto Animated Emoji, do Google, CC BY 4.0), salva em
+// public/emoji-animado/<código>.json. Emoji sem versão animada ganha um arquivo {"semAnimacao": true}
+// para não ser procurado de novo; sem internet, nada é salvo e o emoji fica parado.
+const EMOJI_ANIMADO = path.join(PUBLIC, "emoji-animado");
+const codigoEmoji = (emoji) => Array.from(emoji).map((c) => c.codePointAt(0).toString(16)).join("_");
+const baixandoEmoji = new Map();
+
+const baixarEmojiAnimado = (emoji) => {
+  const codigo = codigoEmoji(emoji);
+  const destino = path.join(EMOJI_ANIMADO, `${codigo}.json`);
+  if (fs.existsSync(destino)) return Promise.resolve();
+  if (baixandoEmoji.has(codigo)) return baixandoEmoji.get(codigo);
+  // O Google às vezes nomeia com o "fe0f" (variação colorida) e às vezes sem.
+  const nomes = [...new Set([codigo, codigo.replace(/_fe0f/g, ""), /_/.test(codigo) ? null : `${codigo}_fe0f`].filter(Boolean))];
+  const tarefa = (async () => {
+    for (const nome of nomes) {
+      const r = await fetch(`https://fonts.gstatic.com/s/e/notoemoji/latest/${nome}/lottie.json`, { signal: AbortSignal.timeout(15000) });
+      if (r.ok) {
+        const texto = await r.text();
+        JSON.parse(texto); // confere que veio uma animação inteira
+        fs.mkdirSync(EMOJI_ANIMADO, { recursive: true });
+        fs.writeFileSync(destino, texto);
+        return;
+      }
+      if (r.status !== 404) throw new Error(`HTTP ${r.status}`);
+    }
+    fs.mkdirSync(EMOJI_ANIMADO, { recursive: true });
+    fs.writeFileSync(destino, JSON.stringify({ semAnimacao: true }));
+  })()
+    .catch((e) => console.log(`Emoji animado ${emoji}: não consegui baixar (${e.message}); fica parado.`))
+    .finally(() => baixandoEmoji.delete(codigo));
+  baixandoEmoji.set(codigo, tarefa);
+  return tarefa;
+};
+
+// Baixa as animações dos emojis da legenda do projeto (os que ainda não tem).
+const garantirEmojisAnimados = (projeto) => {
+  const legenda = lerJson(noPublic(irmao(projeto, ".captions.json")), []);
+  const emojis = new Set(Array.isArray(legenda) ? legenda.map((w) => w?.emoji).filter((e) => typeof e === "string" && e.trim()) : []);
+  return Promise.all([...emojis].map((e) => baixarEmojiAnimado(e.trim())));
+};
+
 const app = express();
 app.use(express.json({ limit: "5mb" }));
 
@@ -561,6 +605,7 @@ app.get("/api/projeto", (req, res) => {
   const id = String(req.query.id || "");
   if (!fs.existsSync(noPublic(id))) return res.status(404).json({ erro: "vídeo não encontrado" });
   res.json({ id, arquivos: arquivosDoProjeto(id), configuracoes: configuracoesDoProjeto(id) });
+  garantirEmojisAnimados(id);
 });
 
 app.put("/api/projeto", (req, res) => {
@@ -573,7 +618,7 @@ app.put("/api/projeto", (req, res) => {
 // ------------------------------------------------------------------ Peça para a IA
 // Ajustes que a IA pode mudar pelo pedido em texto (o app confere de novo antes de aplicar).
 const AJUSTES_DO_PEDIDO = [
-  "captionStyle", "captionColor", "highlightColor", "captionY", "wordsWindowMs", "emojis", "keywords",
+  "captionStyle", "captionColor", "highlightColor", "captionY", "wordsWindowMs", "emojis", "emojiAnimado", "keywords",
   "zooms", "cutTransition", "hookText", "hookDurationMs", "behindTexts", "musicVolume", "duckTo", "sfx", "sfxVolume",
   "cor", "animacoes", "cartelas", "efeitosTela",
 ];
@@ -674,6 +719,7 @@ app.put("/api/legenda", (req, res) => {
   if (!fs.existsSync(arq)) return res.status(404).json({ erro: "legenda não encontrada" });
   salvarJson(arq, req.body);
   res.json({ ok: true });
+  garantirEmojisAnimados(id);
 });
 
 // Lista do B-roll automático: o app mostra as cenas e deixa remover as que não combinaram.
@@ -907,6 +953,7 @@ app.post("/api/exportar", (req, res) => {
   }
   salvarJson(propsArq, { ...props, ...extras, video: projeto });
   const t = novaTarefa("exportar", projeto, "Exportar vídeo");
+  const emojisProntos = props?.emojis && props?.emojiAnimado !== false ? garantirEmojisAnimados(projeto) : Promise.resolve();
   const logArq = path.join(OUT, nome.replace(/\.mp4$/, ".log"));
 
   // Por padrão o Remotion renderiza metade dos núcleos ao mesmo tempo (8 num Ryzen 7), o que
@@ -943,7 +990,8 @@ app.post("/api/exportar", (req, res) => {
       },
     });
   };
-  renderizar();
+  // Antes de começar, espera baixar as animações dos emojis (se faltar alguma).
+  emojisProntos.finally(renderizar);
   res.json({ id: t.id });
 });
 

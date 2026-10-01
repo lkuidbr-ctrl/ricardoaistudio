@@ -341,3 +341,6 @@ scripts/
   usados só pelo `scripts/fonemas.py`, um programa à parte.
 - Os textos animados (`src/effects/Cartelas.tsx`) e os efeitos de cinema (`src/effects/EfeitosTela.tsx`)
   foram feitos a partir das ideias do pacote remotion-templates (MIT, reactvideoeditor.com).
+- Emojis animados: Noto Animated Emoji, do Google (CC BY 4.0, "Animated emoji by Google"). O
+  Studio baixa a animação de cada emoji usado para `public/emoji-animado/`. Ao vender, citar o
+  Google nos créditos do programa.

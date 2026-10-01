@@ -6,7 +6,7 @@ import type { Ia } from "./Ferramentas";
 
 // Só estes ajustes podem vir da IA; cada um é conferido com o mesmo formato do editor.
 const PERMITIDOS = {
-  captionStyle: true, captionColor: true, highlightColor: true, captionY: true, wordsWindowMs: true, emojis: true,
+  captionStyle: true, captionColor: true, highlightColor: true, captionY: true, wordsWindowMs: true, emojis: true, emojiAnimado: true,
   keywords: true, zooms: true, cutTransition: true, hookText: true, hookDurationMs: true, behindTexts: true,
   musicVolume: true, duckTo: true, sfx: true, sfxVolume: true, cor: true, animacoes: true, cartelas: true, efeitosTela: true,
 } as const;
