@@ -170,3 +170,12 @@ que é **novo**.
 4. Editar pelo texto.
 5. Dublagem com a voz do próprio Ricardo (Chatterbox), depois de testar.
 6. Linha do tempo.
+
+### Duas versões: a do Ricardo e a de venda (decidido em 01/10/2026)
+- **Versão do Ricardo** (só para ele e os clientes dele, nunca distribuída): pode usar peças
+  **GPL/AGPL** (ex.: YOLO/Ultralytics para seguir o rosto, RVM para recortar a pessoa), porque
+  essas licenças só cobram algo de quem **distribui** o programa.
+- **Não pode nem na versão do Ricardo:** peças **"não comercial"** (CC BY-NC, "research only",
+  ex.: F5-TTS, Wav2Lip, RMBG-2.0). Fazer vídeo para cliente que paga **é uso comercial**.
+- **Versão de venda:** só MIT, Apache, BSD, ISC, CC BY e parecidas.
+- Tudo o que for grátis e de licença livre entra **nas duas**.
