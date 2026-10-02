@@ -1,12 +1,14 @@
 # Transcrição (Whisper local, grátis; traz o ONNX Runtime e o detector de voz Silero)
 faster-whisper>=1.1
 # Recorte da pessoa (MODNet, Apache-2.0) e voz (Kokoro, Apache-2.0) rodam no ONNX Runtime
-onnxruntime>=1.17
+onnxruntime>=1.20
 opencv-python-headless>=4.9
 # ffmpeg embutido, caso você não tenha o ffmpeg instalado no sistema
 imageio-ffmpeg>=0.5
 # Claude (padrão de enrich, broll, clips e dublagem)
 anthropic>=1.8
+# Voz clonada na dublagem (Chatterbox, MIT): só o leitor de texto do modelo, leve
+tokenizers>=0.20
 # Pronúncia para a voz Kokoro. São GPL-3.0: usados só pelo scripts/fonemas.py, que roda como
 # programa separado (veja o cabeçalho dele).
 phonemizer>=3.3

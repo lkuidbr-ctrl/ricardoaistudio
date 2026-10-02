@@ -95,7 +95,7 @@ export const Ferramentas: React.FC<{
   const [quantos, setQuantos] = useState(3);
   const [vertical, setVertical] = useState(false);
   const [idioma, setIdioma] = useState("en");
-  const [genero, setGenero] = useState("auto");
+  const [genero, setGenero] = useState("clonada");
   const [modelo, setModelo] = useState("small");
 
   const ultima = (tipo: string) => [...tarefas].reverse().find((t) => t.tipo === tipo);
@@ -207,12 +207,13 @@ export const Ferramentas: React.FC<{
       id: "dublar",
       icone: "🌎",
       titulo: "Dublar",
-      descricao: "Traduz e dubla sua fala em outro idioma. Cria um vídeo novo.",
+      descricao: "Traduz e dubla sua fala em outro idioma, com a sua própria voz. Cria um vídeo novo.",
       precisaLegenda: true,
       opcoes: (
         <>
         <select value={genero} onChange={(e) => setGenero(e.target.value)} title="Voz da dublagem">
-          <option value="auto">Voz igual à de quem fala</option>
+          <option value="clonada">A própria voz de quem fala (clonada)</option>
+          <option value="auto">Voz de IA parecida (mais rápida)</option>
           <option value="feminino">Voz feminina</option>
           <option value="masculino">Voz masculina</option>
         </select>
