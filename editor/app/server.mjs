@@ -1232,11 +1232,20 @@ app.post("/api/tarefas/:id/cancelar", (req, res) => {
   res.json({ ok: true });
 });
 
-// A janela do Studio avisa a cada 15 s que continua aberta (ver vigiarJanela).
+// A janela do Studio avisa a cada 15 s que continua aberta e, ao fechar, avisa que fechou
+// (ver vigiarJanela). Janela minimizada pode ficar "adormecida" pelo navegador e parar de
+// avisar por muito tempo: por isso só o aviso de fechar desliga o motor rápido.
 let ultimaPresenca = Date.now();
-const SEM_JANELA_MS = 75_000;
+let janelaFechouEm = null;
+const DEPOIS_DE_FECHAR_MS = 30_000; // tempo para uma recarga da página voltar a avisar
+const SEM_NOTICIA_MS = 6 * 60 * 60 * 1000; // sem aviso nenhum (navegador travou): 6 horas
 app.post("/api/presenca", (_req, res) => {
   ultimaPresenca = Date.now();
+  janelaFechouEm = null;
+  res.json({ ok: true });
+});
+app.post("/api/janela-fechou", (_req, res) => {
+  janelaFechouEm = Date.now();
   res.json({ ok: true });
 });
 
@@ -1424,14 +1433,15 @@ const abrirNavegador = (url) => {
   spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: true }).on("error", () => {}).unref();
 };
 
-// O motor roda escondido: quando a janela do Studio fica fechada por um tempo (e nada está
-// rodando, como uma exportação), ele se desliga sozinho. A janela avisa que está aberta
-// a cada 15 s (/api/presenca).
+// O motor roda escondido: quando a janela do Studio é fechada (e nada está rodando, como uma
+// exportação), ele se desliga sozinho. A janela avisa que está aberta a cada 15 s
+// (/api/presenca) e avisa quando fecha (/api/janela-fechou).
 const vigiarJanela = () => {
   if (process.env.STUDIO_SEM_AUTOSAIR) return;
   setInterval(() => {
     const ocupado = [...tarefas.values()].some((t) => t.status === "rodando");
-    if (!ocupado && Date.now() - ultimaPresenca > SEM_JANELA_MS) {
+    const fechou = janelaFechouEm !== null && Date.now() - janelaFechouEm > DEPOIS_DE_FECHAR_MS;
+    if (!ocupado && (fechou || Date.now() - ultimaPresenca > SEM_NOTICIA_MS)) {
       console.log("Janela do Studio fechada: desligando o motor.");
       process.exit(0);
     }
