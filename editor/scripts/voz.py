@@ -6,6 +6,7 @@ Narrar um roteiro (vira um vídeo 9:16 com a narração e as legendas prontas):
 
 Dublar um vídeo seu em outro idioma (tradução pelo Claude, ou --ia ollama):
     python scripts/voz.py dublar public/video.mp4 --idioma en
+    python scripts/voz.py dublar public/video.mp4 --idioma en --voz-clonada   # com a SUA voz
     python scripts/voz.py dublar public/video.mp4 --idioma es --ia ollama --manter-fundo 0.15
 
 Na primeira vez, o modelo de voz (~90 MB) é baixado para scripts/modelos/.
@@ -322,11 +323,18 @@ def dublar(args: argparse.Namespace) -> None:
         if ainda:
             print(f"AVISO: {len(ainda)} frase(s) ficaram sem tradução e sem voz: " + "; ".join(fr[i]["texto"][:40] for i in ainda))
 
-    genero = None if args.genero == "auto" else args.genero
-    if not args.voz and not genero:
-        genero = genero_da_fala(args.video) or "masculino"
-        print(f"(voz {'feminina' if genero == 'feminino' else 'masculina'}, igual à de quem fala no vídeo)")
-    voz = carregar_voz(args.idioma, args.voz, genero)
+    if args.voz_clonada:
+        # A própria voz de quem fala no vídeo (Chatterbox, licença MIT), copiada de ~10 s de fala.
+        from voz_clonada import VozClonada, amostra_da_voz
+
+        print("(voz clonada de quem fala no vídeo; na primeira vez o modelo, ~1,5 GB, é baixado)")
+        voz = VozClonada(args.idioma, amostra_da_voz(args.video))
+    else:
+        genero = None if args.genero == "auto" else args.genero
+        if not args.voz and not genero:
+            genero = genero_da_fala(args.video) or "masculino"
+            print(f"(voz {'feminina' if genero == 'feminino' else 'masculina'}, igual à de quem fala no vídeo)")
+        voz = carregar_voz(args.idioma, args.voz, genero)
     taxa = voz.sample_rate
     voz.preparar([t for t in traducao.values() if t])
     total = duracao_video(args.video)
@@ -402,6 +410,7 @@ def main() -> None:
     d.add_argument("video", type=Path)
     d.add_argument("--idioma", choices=sorted(VOZES_PADRAO), required=True)
     d.add_argument("--manter-fundo", type=float, default=0.0, help="volume do áudio original por baixo (0 a 1)")
+    d.add_argument("--voz-clonada", action="store_true", help="dubla com a voz de quem fala no vídeo (Chatterbox)")
     add_ia_args(d)
 
     for p in (n, d):

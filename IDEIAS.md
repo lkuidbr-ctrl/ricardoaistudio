@@ -170,8 +170,9 @@ que é **novo**.
 3. ~~Cortes no ritmo da música.~~ **Feito (01/10):** Minhas músicas (ex.: Suno), IA escolhe a música,
    botão Trocar, efeitos na batida e pulso.
 4. ~~Editar pelo texto.~~ **Feito (01/10):** botão Cortar/Voltar em cada frase da aba Legenda.
-5. Dublagem com a voz do próprio Ricardo (Chatterbox), depois de testar.
-6. Linha do tempo.
+5. ~~Dublagem com a voz do próprio Ricardo (Chatterbox), depois de testar.~~ **Feito (02/10):** Chatterbox
+   Multilingual em ONNX (sem PyTorch), copia a voz do próprio vídeo.
+6. ~~Linha do tempo.~~ **Feito (02/10):** faixas de fala, zoom, textos, efeitos e B-roll embaixo do vídeo.
 
 ### Duas versões: a do Ricardo e a de venda (decidido em 01/10/2026)
 - **Versão do Ricardo** (só para ele e os clientes dele, nunca distribuída): pode usar peças

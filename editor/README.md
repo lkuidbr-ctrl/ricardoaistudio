@@ -330,6 +330,7 @@ scripts/
   broll.py              B-roll automático com clipes grátis do Pexels
   _ia.py                chamadas de IA compartilhadas (Claude via login OAuth / Ollama)
   gerar_sfx.py          sintetiza os efeitos sonoros de public/sfx/ (sem direito autoral)
+  voz_clonada.py        voz clonada (Chatterbox, MIT) para a dublagem com a voz de quem fala
   musica.py             Minhas músicas: ritmo de cada música e escolha da música de cada vídeo
   segment.py            MODNet -> pessoa com fundo transparente
 ```
@@ -345,3 +346,5 @@ scripts/
 - Emojis animados: Noto Animated Emoji, do Google (CC BY 4.0, "Animated emoji by Google"). O
   Studio baixa a animação de cada emoji usado para `public/emoji-animado/`. Ao vender, citar o
   Google nos créditos do programa.
+- A dublagem com a voz clonada usa o Chatterbox Multilingual (Resemble AI, MIT), na versão ONNX
+  da onnx-community.

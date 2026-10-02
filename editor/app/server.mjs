@@ -401,7 +401,8 @@ const FERRAMENTAS = {
   },
   dublar: {
     rotulo: "Dublar",
-    args: (v, o) => [py("voz.py"), "dublar", v, "--idioma", o.idioma || "en", "--genero", GENEROS.has(o.genero) ? o.genero : "auto",
+    args: (v, o) => [py("voz.py"), "dublar", v, "--idioma", o.idioma || "en",
+      ...(o.genero === "clonada" ? ["--voz-clonada"] : ["--genero", GENEROS.has(o.genero) ? o.genero : "auto"]),
       ...argsIa(o)],
     novo: (id, o) => irmao(id, `.${o.idioma || "en"}.mp4`),
   },

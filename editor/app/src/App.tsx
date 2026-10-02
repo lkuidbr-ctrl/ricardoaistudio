@@ -1,4 +1,5 @@
 import { Player, type PlayerRef } from "@remotion/player";
+import { LinhaDoTempo } from "./LinhaDoTempo";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { calculateMetadata, defaultProps } from "../../src/Root";
 import type { ShortVideoProps } from "../../src/schema";
@@ -543,8 +544,9 @@ export const App: React.FC = () => {
             ) : null}
           </aside>
 
-          <section className="palco">
+          <section className={`palco${props && duracao ? " com-linha" : ""}`}>
             {props && duracao ? (
+              <>
               <div className="moldura">
                 <Player
                   ref={player}
@@ -570,6 +572,8 @@ export const App: React.FC = () => {
                   style={{ width: "100%", height: "100%" }}
                 />
               </div>
+              <LinhaDoTempo props={props} mudar={mudar} duracaoFrames={duracao} player={player} />
+              </>
             ) : (
               <div className="carregando">{erroPreview ? `Não deu para mostrar o vídeo: ${erroPreview}` : "Carregando..."}</div>
             )}

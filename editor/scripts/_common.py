@@ -24,7 +24,7 @@ def baixar_modelo(url: str, nome: str) -> Path:
     destino = MODELOS / nome
     if destino.exists():
         return destino
-    MODELOS.mkdir(parents=True, exist_ok=True)
+    destino.parent.mkdir(parents=True, exist_ok=True)
     parcial = destino.with_suffix(destino.suffix + ".baixando")
     req = urllib.request.Request(url, headers={"User-Agent": "ricardoaistudio-editor"})
     with urllib.request.urlopen(req, timeout=60) as r, open(parcial, "wb") as f:
