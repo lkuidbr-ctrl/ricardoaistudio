@@ -461,50 +461,113 @@ const AbaTextos: React.FC<Props> = ({ props, mudar, arquivos, agoraMs, irPara })
   );
 };
 
+// IA escolhida na coluna da esquerda (o App guarda no navegador).
+const lerIa = () => {
+  try {
+    return localStorage.getItem("ia-escolhida") ?? "claude";
+  } catch {
+    return "claude";
+  }
+};
+
 type AutoBroll = { src: string; sourceMs: number; durationMs: number; mode: string; busca?: string; frase?: string };
 
 // Cenas que o B-roll automático escolheu: dá para conferir cada uma e tirar a que não combinou.
-const BrollAutomatico: React.FC<{ arquivo: string; mudar: Props["mudar"] }> = ({ arquivo, mudar }) => {
+const BrollAutomatico: React.FC<{ arquivo: string; video: string; mudar: Props["mudar"] }> = ({ arquivo, video, mudar }) => {
   const [itens, setItens] = useState<AutoBroll[] | null>(null);
+  const [versao, setVersao] = useState(0);
+  // Cena com o campo "o que você quer ver" aberto, e a que está sendo trocada.
+  const [pedindo, setPedindo] = useState<number | null>(null);
+  const [pedido, setPedido] = useState("");
+  const [trocando, setTrocando] = useState<number | null>(null);
+  const [erro, setErro] = useState("");
   useEffect(() => {
     let vivo = true;
-    get<AutoBroll[]>(`/${arquivo}`)
+    get<AutoBroll[]>(`/${arquivo}?v=${versao}`)
       .then((l) => vivo && setItens(Array.isArray(l) ? l : []))
       .catch(() => vivo && setItens(null));
     return () => {
       vivo = false;
     };
-  }, [arquivo]);
+  }, [arquivo, versao]);
   if (!itens) return null;
+
+  const recarregarPreview = () => {
+    mudar({ brollFile: "" });
+    setTimeout(() => mudar({ brollFile: arquivo }), 50);
+  };
+  const trocar = async (i: number) => {
+    setTrocando(i);
+    setErro("");
+    try {
+      await enviar("POST", "/api/broll/trocar", { projeto: video, indice: i, pedido, ia: lerIa() });
+      setPedindo(null);
+      setPedido("");
+      setVersao((v) => v + 1);
+      recarregarPreview();
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setTrocando(null);
+    }
+  };
 
   const remover = async (i: number) => {
     const nova = itens.filter((_, j) => j !== i);
     await enviar("PUT", `/api/broll?arquivo=${encodeURIComponent(arquivo)}`, nova);
     setItens(nova);
     // Recarrega o preview: desliga e religa o arquivo do B-roll.
-    mudar({ brollFile: "" });
-    setTimeout(() => mudar({ brollFile: arquivo }), 50);
+    recarregarPreview();
   };
 
   return (
     <div className="lista">
       <p className="vazio-lista">
-        {itens.length ? `Cenas escolhidas pela IA (${itens.length}). Tire as que não combinaram:` : "Nenhuma cena automática sobrou."}
+        {itens.length ? `Cenas escolhidas pela IA (${itens.length}). Troque ou tire as que não combinaram:` : "Nenhuma cena automática sobrou."}
       </p>
+      {erro ? <p className="alerta">{erro}</p> : null}
       {itens.map((b, i) => (
         <div className="item" key={b.src + i}>
           <div className="item-topo">
-            <video className="miniatura" src={`/${b.src}#t=0.5`} muted preload="metadata" />
+            <video key={b.src} className="miniatura" src={`/${b.src}#t=0.5`} muted preload="metadata" />
             <div className="item-nome" style={{ cursor: "default" }}>
               <span>{b.frase ? `“${b.frase}”` : (b.src.split("/").pop() ?? b.src)}</span>
               <small>
                 {formatarTempo(b.sourceMs)} do vídeo original · {b.durationMs / 1000}s{b.busca ? ` · busca: ${b.busca}` : ""}
               </small>
             </div>
-            <button type="button" className="botao pequeno fantasma" title="Tirar esta cena" onClick={() => remover(i)}>
+            <button
+              type="button"
+              className="botao pequeno fantasma"
+              title="Trocar por outro vídeo"
+              disabled={trocando !== null}
+              onClick={() => {
+                setPedindo(pedindo === i ? null : i);
+                setPedido("");
+              }}
+            >
+              🔄
+            </button>
+            <button type="button" className="botao pequeno fantasma" title="Tirar esta cena" disabled={trocando !== null} onClick={() => remover(i)}>
               ✕
             </button>
           </div>
+          {pedindo === i ? (
+            <div className="item-corpo trocar-broll">
+              <input
+                type="text"
+                autoFocus
+                value={pedido}
+                disabled={trocando !== null}
+                placeholder="O que você quer ver? (opcional) Ex.: mulher acordada de olhos abertos na cama"
+                onChange={(e) => setPedido(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && trocar(i)}
+              />
+              <button type="button" className="botao pequeno primario" disabled={trocando !== null} onClick={() => trocar(i)}>
+                {trocando === i ? "Procurando outro vídeo..." : "Trocar"}
+              </button>
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
@@ -773,7 +836,7 @@ const AbaEfeitos: React.FC<Props> = (p) => {
       {arquivos.brollFile ? (
         <Alternar rotulo="Usar o B-roll automático" ligado={Boolean(props.brollFile)} aoMudar={(v) => mudar({ brollFile: v ? props.video.replace(/\.[^./]+$/, "") + ".broll.json" : "" })} />
       ) : null}
-      {props.brollFile ? <BrollAutomatico arquivo={props.brollFile} mudar={mudar} /> : null}
+      {props.brollFile ? <BrollAutomatico arquivo={props.brollFile} video={props.video} mudar={mudar} /> : null}
       <Lista<Broll>
         itens={props.broll}
         titulo={(b) => b.src.split("/").pop() ?? b.src}

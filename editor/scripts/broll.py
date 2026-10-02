@@ -5,6 +5,8 @@ Uso:
     python scripts/broll.py public/video.mp4 --ia ollama
     python scripts/broll.py public/video.mp4 --ia dicionario   # dicionário embutido, sem IA
     python scripts/broll.py public/video.mp4 --so-planejar     # não baixa nada, só mostra o plano
+    python scripts/broll.py public/video.mp4 --trocar 2 --pedido "mulher acordada na cama"
+                                                               # troca só a cena 3 (conta do 0)
 
 Precisa de uma chave grátis do Pexels (https://www.pexels.com/api/) na variável
 PEXELS_API_KEY. Os clipes vão para public/broll/ e o plano para public/video.broll.json;
@@ -101,10 +103,14 @@ def escolher_arquivo(video: dict, largura_alvo: int = 1080) -> dict | None:
     return min(arquivos, key=lambda f: abs(f["width"] - largura_alvo) + (0 if f["height"] >= f["width"] else 2000))
 
 
-def buscar_pexels(busca: str, chave: str, minimo_s: float, quantos: int = 4) -> list[tuple[dict, dict]]:
-    """Até `quantos` vídeos verticais do Pexels que durem o suficiente, na ordem do Pexels."""
-    url = "https://api.pexels.com/videos/search?" + urllib.parse.urlencode(
-        {"query": busca, "orientation": "portrait", "size": "medium", "per_page": 8}
+def buscar_pexels(busca: str, chave: str, minimo_s: float, quantos: int = 4,
+                  evitar: set[int] | None = None) -> list[tuple[dict, dict]]:
+    """Até `quantos` vídeos verticais do Pexels que durem o suficiente, na ordem do Pexels
+    (sem os de `evitar`: já usados ou recusados)."""
+    evitar = evitar or set()
+    # PEXELS_API_URL só serve para testes automatizados (um Pexels falso).
+    url = os.environ.get("PEXELS_API_URL", "https://api.pexels.com") + "/videos/search?" + urllib.parse.urlencode(
+        {"query": busca, "orientation": "portrait", "size": "medium", "per_page": 8 + len(evitar)}
     )
     req = urllib.request.Request(url, headers={"Authorization": chave, "User-Agent": "ricardoaistudio-editor"})
     try:
@@ -116,6 +122,8 @@ def buscar_pexels(busca: str, chave: str, minimo_s: float, quantos: int = 4) -> 
         raise SystemExit(f"Erro do Pexels ({e.code}) buscando '{busca}'")
     candidatos = []
     for video in dados.get("videos", []):
+        if video.get("id") in evitar:
+            continue
         if video.get("duration", 0) >= minimo_s:
             arquivo = escolher_arquivo(video)
             if arquivo:
@@ -128,8 +136,10 @@ def buscar_pexels(busca: str, chave: str, minimo_s: float, quantos: int = 4) -> 
 ESCOLHA_INSTRUCOES = """Você escolhe B-roll (imagens de apoio) para vídeos curtos.
 Vou mostrar a frase falada naquele momento do vídeo e miniaturas de vídeos de banco de imagens.
 Escolha a miniatura que ILUSTRA MELHOR o sentido da frase para quem está assistindo.
-Se nenhuma tiver relação clara com a frase, responda -1: é melhor não ter B-roll do que ter
-uma imagem sem nada a ver.
+Confira os detalhes que mudam o sentido: acordada x dormindo, triste x feliz, sozinha x
+acompanhada, dia x noite. Uma pessoa DORMINDO não serve para "acorda à noite" ou "não consegue
+dormir". Se nenhuma tiver relação clara com a frase, responda -1: é melhor não ter B-roll do que
+ter uma imagem sem nada a ver.
 Respeite o assunto e o público do vídeo inteiro (ex.: num vídeo para mulheres, não escolha um
 homem como protagonista da imagem)."""
 
@@ -149,7 +159,8 @@ def miniatura(video: dict) -> str | None:
     return url + ("&" if "?" in url else "?") + "auto=compress&w=360"
 
 
-def escolher_com_visao(args, frase: str, busca: str, candidatos: list[tuple[dict, dict]], contexto: str = "") -> int:
+def escolher_com_visao(args, frase: str, busca: str, candidatos: list[tuple[dict, dict]], contexto: str = "",
+                       pedido: str = "") -> int:
     """Índice do candidato que combina com a frase, ou -1 se nenhum combina.
     Só o Claude enxerga imagens; nas outras IAs fica o primeiro resultado do Pexels."""
     if args.ia != "claude":
@@ -158,7 +169,8 @@ def escolher_com_visao(args, frase: str, busca: str, candidatos: list[tuple[dict
         {
             "type": "text",
             "text": f'Começo do vídeo (para saber o assunto e o público): "{contexto}"\n'
-            f'Frase falada neste momento: "{frase}"\nBusca usada no banco de imagens: "{busca}"',
+            f'Frase falada neste momento: "{frase}"\nBusca usada no banco de imagens: "{busca}"'
+            + (f'\nO usuário pediu especificamente: "{pedido}". Siga o pedido dele.' if pedido else ""),
         }
     ]
     validos = 0
@@ -187,11 +199,92 @@ def baixar(url: str, destino: Path) -> None:
             f.write(chunk)
 
 
+NOVA_BUSCA_INSTRUCOES = """Você ajuda a escolher B-roll (vídeos de banco de imagens) para vídeos curtos.
+A cena abaixo foi recusada pelo usuário. Escreva uma busca NOVA para o Pexels: 2 a 5 palavras EM
+INGLÊS, concretas e visuais, diferente da anterior. Se o usuário disse o que quer, siga o pedido
+dele à risca (traduza para o inglês). Respeite o assunto e o público do vídeo."""
+
+NOVA_BUSCA_SCHEMA = {
+    "type": "object",
+    "properties": {"busca": {"type": "string"}},
+    "required": ["busca"],
+    "additionalProperties": False,
+}
+
+
+def id_do_clipe(src: str) -> int | None:
+    m = re.search(r"-(\d+)\.mp4$", src)
+    return int(m.group(1)) if m else None
+
+
+def trocar(args, captions: list[dict], chave: str) -> None:
+    """Troca uma cena só do B-roll por outro clipe (com o pedido do usuário, se houver)."""
+    arq = output_path(args.video, ".broll.json")
+    if not arq.exists():
+        raise SystemExit("Este vídeo ainda não tem B-roll automático.")
+    itens = json.loads(arq.read_text(encoding="utf-8"))
+    if not 0 <= args.trocar < len(itens):
+        raise SystemExit("Cena de B-roll não encontrada.")
+    item = itens[args.trocar]
+    pedido = (args.pedido or "").strip()
+    # Clipes que não podem voltar: os desta cena recusados antes e os das outras cenas.
+    evitar = {i for i in (id_do_clipe(b["src"]) for b in itens) if i} | set(item.get("recusados", []))
+    frase = item.get("frase") or ""
+    contexto = "".join(c["text"] for c in captions)[:600].strip()
+
+    busca = item.get("busca", "")
+    if args.ia != "dicionario":
+        try:
+            r = pedir_json(
+                args, NOVA_BUSCA_INSTRUCOES,
+                f'Começo do vídeo: "{contexto}"\nFrase falada na cena: "{frase}"\nBusca anterior: "{busca}"'
+                + (f'\nO usuário quer: "{pedido}"' if pedido else "\nO usuário não disse o que quer; só não gostou."),
+                NOVA_BUSCA_SCHEMA,
+            )
+            busca = r.get("busca", "").strip() or busca
+        except IaIndisponivel as e:
+            avisar_sem_ia(e)
+    elif pedido:
+        busca = pedido  # sem IA, busca com as palavras do usuário
+    print(f"busca: '{busca}'" + (f" (pedido: {pedido})" if pedido else ""))
+
+    candidatos = buscar_pexels(busca, chave, item["durationMs"] / 1000, quantos=6, evitar=evitar)
+    if not candidatos and busca != item.get("busca"):
+        candidatos = buscar_pexels(item.get("busca", busca), chave, item["durationMs"] / 1000, quantos=6, evitar=evitar)
+    if not candidatos:
+        raise SystemExit("Não achei outro clipe no Pexels para esta cena. Tente descrever de outro jeito.")
+    try:
+        escolha = escolher_com_visao(args, frase, busca, candidatos, contexto, pedido)
+    except IaIndisponivel:
+        escolha = 0
+    if escolha < 0:
+        # O usuário pediu para trocar: melhor o mais próximo do que ficar sem nada.
+        print("(nenhum combinou perfeitamente; usando o primeiro resultado)")
+        escolha = 0
+    video, arquivo = candidatos[escolha]
+    pasta = args.video.parent / "broll"
+    pasta.mkdir(exist_ok=True)
+    nome = f"{args.video.stem}-{args.trocar + 1}-{video['id']}.mp4"
+    if not (pasta / nome).exists():
+        baixar(arquivo["link"], pasta / nome)
+    antigo = id_do_clipe(item["src"])
+    item["recusados"] = sorted(set(item.get("recusados", [])) | ({antigo} if antigo else set()))
+    item["src"] = f"broll/{nome}"
+    item["busca"] = busca
+    arq.write_text(json.dumps(itens, ensure_ascii=False, indent=1), encoding="utf-8")
+    creditos = pasta / f"{args.video.stem}-creditos.txt"
+    with open(creditos, "a", encoding="utf-8") as f:
+        f.write(f"{video.get('user', {}).get('name', '?')} - {video.get('url', '')}\n")
+    print(f"-> cena {args.trocar + 1} trocada: {nome}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("video", type=Path)
     add_ia_args(parser)
     parser.add_argument("--so-planejar", action="store_true", help="só mostra as cenas escolhidas, sem baixar")
+    parser.add_argument("--trocar", type=int, help="troca só esta cena (posição na lista, contando do 0)")
+    parser.add_argument("--pedido", help="o que você quer ver na cena trocada (em português)")
     args = parser.parse_args()
 
     captions_file = output_path(args.video, ".captions.json")
@@ -205,6 +298,12 @@ def main() -> None:
             "Defina PEXELS_API_KEY com sua chave grátis do Pexels (https://www.pexels.com/api/), "
             "ou rode com --so-planejar para só ver o plano."
         )
+
+    if args.trocar is not None:
+        if not chave:
+            raise SystemExit("Coloque a chave do Pexels em Configurações para trocar o B-roll.")
+        trocar(args, captions, chave)
+        return
 
     if args.ia == "dicionario":
         plano = por_dicionario(captions)
