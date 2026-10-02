@@ -134,12 +134,34 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Avisa o motor que a janela está aberta; fechada por ~1 min, ele se desliga sozinho.
+  // Avisa o motor que a janela está aberta e, ao fechar, que fechou (aí ele se desliga sozinho).
+  // Se o motor não responder, mostra um aviso e volta sozinha quando ele voltar.
+  const [semMotor, setSemMotor] = useState(false);
   useEffect(() => {
-    const avisarPresenca = () => fetch("/api/presenca", { method: "POST" }).catch(() => {});
+    let falhas = 0;
+    const avisarPresenca = () =>
+      fetch("/api/presenca", { method: "POST" })
+        .then((r) => {
+          if (!r.ok) throw new Error();
+          if (falhas >= 2) window.location.reload(); // o motor voltou depois de cair
+          falhas = 0;
+        })
+        .catch(() => {
+          falhas++;
+          if (falhas >= 2) setSemMotor(true);
+        });
     avisarPresenca();
     const intervalo = setInterval(avisarPresenca, 15_000);
-    return () => clearInterval(intervalo);
+    // Ao voltar para a janela (estava minimizada), confere na hora.
+    const visivel = () => document.visibilityState === "visible" && avisarPresenca();
+    document.addEventListener("visibilitychange", visivel);
+    const fechou = () => navigator.sendBeacon?.("/api/janela-fechou");
+    window.addEventListener("pagehide", fechou);
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", visivel);
+      window.removeEventListener("pagehide", fechou);
+    };
   }, []);
 
   // Salva os ajustes automaticamente (meio segundo depois da última mudança).
@@ -598,6 +620,19 @@ export const App: React.FC = () => {
             </div>
           </div>
         ))}
+
+      {semMotor && !reiniciando ? (
+        <div className="modal-fundo">
+          <div className="modal">
+            <h2>O Studio foi fechado</h2>
+            <p className="dica">
+              O motor do Studio não está respondendo. Se ele estiver só reiniciando, esta janela volta sozinha em alguns
+              segundos. Se não voltar, feche esta janela e abra o Studio de novo pelo atalho da Área de Trabalho.
+            </p>
+            <div className="barra grande"><i className="indeterminada" /></div>
+          </div>
+        </div>
+      ) : null}
 
       {reiniciando ? (
         <div className="modal-fundo">
