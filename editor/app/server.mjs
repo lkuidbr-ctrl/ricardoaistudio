@@ -741,6 +741,31 @@ app.put("/api/legenda", (req, res) => {
 });
 
 // Lista do B-roll automático: o app mostra as cenas e deixa remover as que não combinaram.
+// Troca uma cena só do B-roll automático (com o que o usuário quer ver, se ele disser).
+app.post("/api/broll/trocar", (req, res) => {
+  const { projeto, indice, pedido, ia } = req.body || {};
+  if (!projeto || !fs.existsSync(noPublic(projeto)) || !Number.isInteger(indice)) return res.status(400).json({ erro: "pedido inválido" });
+  const args = [py("broll.py"), noPublic(projeto), "--trocar", String(indice), ...argsIa({ ia })];
+  if (typeof pedido === "string" && pedido.trim()) args.push("--pedido", pedido.trim().slice(0, 200));
+  const proc = spawn(pythonExe(), args, {
+    cwd: EDITOR,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8", ...envDasChaves() },
+    windowsHide: true,
+  });
+  let saida = "";
+  proc.stdout.on("data", (d) => (saida += d));
+  proc.stderr.on("data", (d) => (saida += d));
+  const limite = setTimeout(() => proc.kill(), 180000);
+  proc.on("close", (codigo) => {
+    clearTimeout(limite);
+    if (codigo === 0) return res.json({ ok: true });
+    // A última linha do script é a explicação do problema (ex.: chave do Pexels faltando).
+    const linhas = saida.trim().split(/\r?\n/).filter(Boolean);
+    res.status(500).json({ erro: linhas.pop() || "não deu para trocar" });
+  });
+  proc.on("error", (e) => res.status(500).json({ erro: e.message }));
+});
+
 app.put("/api/broll", (req, res) => {
   const arquivo = String(req.query.arquivo || "");
   if (!arquivo.endsWith(".broll.json") || !Array.isArray(req.body)) return res.status(400).json({ erro: "pedido inválido" });
