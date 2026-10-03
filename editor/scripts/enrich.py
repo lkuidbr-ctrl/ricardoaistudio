@@ -36,7 +36,17 @@ Escolha:
    menos de 3 segundos entre eles e nunca nos 2 primeiros segundos. "forte": true só nos 1 ou 2
    momentos mais fortes do vídeo.
 4. "gancho": título curto (até 6 palavras) que aparece no começo do vídeo e faz a pessoa
-   querer assistir até o fim. Fiel ao que é falado, sem inventar promessa. Sem emoji e sem aspas.
+   querer assistir até o fim. Cria uma curiosidade ou tensão que o vídeo resolve. Escolha o
+   ângulo que melhor combina com o que é falado:
+   - número: um dado concreto dito no vídeo ("3 erros que travam suas vendas");
+   - contrário: vai contra o senso comum ("Postar todo dia não funciona");
+   - transformação: antes e depois ("Do zero a R$ 10 mil em 30 dias");
+   - confissão: admite um erro ou fato incômodo ("Perdi dinheiro com isso");
+   - previsão: aponta o que vem aí ("Isso vai mudar o seu marketing");
+   - autoridade: cita quem ou o que dá peso à fala.
+   Use só um ângulo que o vídeo sustente. Fiel ao que é falado: nunca invente número,
+   resultado ou história que a pessoa não disse. Prefira afirmação a pergunta, sem enrolação
+   ("Como", "Você sabia que"). Sem emoji e sem aspas.
 5. "animacoes": animações prontas por cima do vídeo, só onde reforçam a fala. Cerca de 1 a cada
    10 a 15 segundos (um vídeo de 1 minuto tem de 3 a 5), nunca nos 2 primeiros segundos.
    Tipos: "check" (certo, sim, funciona), "xis" (erro, não faça, proibido), "seta" (olha isso,
