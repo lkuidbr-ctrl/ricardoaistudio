@@ -34,7 +34,14 @@ def _escolher_dispositivo(device: str) -> str:
     try:
         import ctranslate2
 
-        return "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+        if ctranslate2.get_cuda_device_count() == 0:
+            return "cpu"
+        # Placa antiga (ex.: GTX 750 Ti) não faz float16: o Whisper converte tudo para float32,
+        # fica lento e pode travar com 2 GB de memória. Aí o processador é mais rápido e seguro.
+        if "float16" not in ctranslate2.get_supported_compute_types("cuda"):
+            print("(placa de vídeo antiga para o Whisper; usando o processador, que é mais rápido nela)")
+            return "cpu"
+        return "cuda"
     except Exception:
         return "cpu"
 
