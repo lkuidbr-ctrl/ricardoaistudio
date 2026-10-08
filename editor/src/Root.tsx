@@ -80,6 +80,7 @@ export const defaultProps: ShortVideoProps = {
   audio: "",
   preview: "",
   cor: { brilho: 1, contraste: 1, saturacao: 1, temperatura: 0, sombras: 0 },
+  lut: "",
   animacoes: [],
   cartelas: [],
   efeitosTela: [],

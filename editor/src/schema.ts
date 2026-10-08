@@ -126,6 +126,8 @@ export const shortVideoSchema = z.object({
   efeitosTela: z.array(efeitoTelaSchema),
   // Correção de cor do vídeo (scripts/cor.py sugere; dá para ajustar na aba Efeitos).
   cor: corSchema,
+  // Look de cor (LUT .cube em public/, ex.: luts/cinema.cube). Vazio = sem LUT. Roda por cima da correção de cor.
+  lut: z.string().default(""),
   // Áudio da voz melhorado (scripts/audio.py: sem ruído e no volume certo). Vazio = som original.
   audio: z.string(),
   // Música de fundo (mp3/wav em public/). Vazio = sem música.

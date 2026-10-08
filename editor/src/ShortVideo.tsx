@@ -26,6 +26,7 @@ import {
 } from "./timeline";
 import { batidasNoVideo, naBatida, type Ritmo } from "./ritmo";
 import { useJson } from "./useJson";
+import { useTexto } from "./useTexto";
 
 // Camadas, de baixo para cima:
 //   1. vídeo original (só os trechos mantidos pelo corte de silêncios)
@@ -39,6 +40,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
   const { fps, durationInFrames } = useVideoConfig();
   const rawCaptions = useJson<EnrichedCaption[]>(props.captions);
   const cuts = useJson<CutsFile>(props.cuts);
+  const lutCube = useTexto(props.lut ?? "");
   const autoBroll = useJson<AutoBroll[]>(props.brollFile);
   const brand = useBrand(props.brand);
   const hookFrames = props.hookText ? Math.round((props.hookDurationMs / 1000) * fps) : 0;
@@ -130,7 +132,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
           <CutTransition kind={props.cutTransition} joins={joins}>
             {props.video ? (
               <ComCor cor={props.cor} id="cor-video">
-                <CutVideo src={fonte} timeline={timeline} muted={Boolean(somDaFala)} />
+                <CutVideo src={fonte} timeline={timeline} muted={Boolean(somDaFala)} lut={lutCube} />
               </ComCor>
             ) : null}
 
@@ -147,7 +149,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
             {props.person && props.behindTexts.length > 0 ? (
               <AbsoluteFill>
                 <ComCor cor={props.cor} id="cor-pessoa">
-                  <CutVideo src={props.person} timeline={timeline} transparent muted />
+                  <CutVideo src={props.person} timeline={timeline} transparent muted lut={lutCube} />
                 </ComCor>
               </AbsoluteFill>
             ) : null}
@@ -160,7 +162,7 @@ export const ShortVideo: React.FC<ShortVideoProps> = (props) => {
         <Sequence from={fimDaFala} durationInFrames={ctaFrames}>
           <Freeze frame={Math.max(0, timeline.totalFrames - 1)}>
             <ComCor cor={props.cor} id="cor-final">
-              <CutVideo src={fonte} timeline={timeline} muted />
+              <CutVideo src={fonte} timeline={timeline} muted lut={lutCube} />
             </ComCor>
           </Freeze>
         </Sequence>

@@ -938,6 +938,13 @@ const analisarMusicas = () => {
   proc.on("error", () => (analisandoMusicas = false));
 };
 
+// Looks de cor (LUT .cube) em public/luts: os prontos (scripts/lut.py) e os que você copiar para lá.
+app.get("/api/luts", (_req, res) => {
+  const pasta = path.join(PUBLIC, "luts");
+  const nomes = fs.existsSync(pasta) ? fs.readdirSync(pasta).filter((n) => /\.cube$/i.test(n)).sort() : [];
+  res.json(nomes.map((n) => ({ arquivo: `luts/${n}`, nome: n.replace(/\.cube$/i, "").replace(/[-_]+/g, " ") })));
+});
+
 app.get("/api/musicas", (_req, res) => {
   analisarMusicas();
   res.json(

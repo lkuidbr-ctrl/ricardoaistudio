@@ -1,4 +1,6 @@
 import React from "react";
+import { lut } from "@remotion/effects/lut";
+import { Video } from "@remotion/media";
 import { Audio, OffthreadVideo, Sequence, staticFile } from "remotion";
 import type { Timeline } from "../timeline";
 
@@ -10,20 +12,36 @@ export const CutVideo: React.FC<{
   timeline: Timeline;
   transparent?: boolean;
   muted?: boolean;
-}> = ({ src, timeline, transparent = false, muted = false }) => (
+  // Conteúdo de um LUT .cube. Com ele, o vídeo toca pelo <Video> do @remotion/media, que aplica
+  // o look na imagem; sem ele, segue pelo <OffthreadVideo> de sempre.
+  lut?: string | null;
+}> = ({ src, timeline, transparent = false, muted = false, lut: lutCube }) => (
   <>
     {timeline.segments.map((s) => (
       // premountFor: no preview, cada trecho já fica carregado e na posição certa 1 s antes de
       // aparecer. Sem isso o vídeo pisca preto em cada corte enquanto carrega.
       <Sequence key={s.outFrom} from={s.outFrom} durationInFrames={s.srcTo - s.srcFrom} premountFor={30}>
-        <OffthreadVideo
-          src={staticFile(src)}
-          trimBefore={s.srcFrom}
-          trimAfter={s.srcTo}
-          transparent={transparent}
-          muted={muted}
-          style={cover}
-        />
+        {lutCube ? (
+          <Video
+            src={staticFile(src)}
+            trimBefore={s.srcFrom}
+            trimAfter={s.srcTo}
+            muted={muted}
+            objectFit="cover"
+            style={cover}
+            effects={[lut({ content: lutCube })]}
+            fallbackOffthreadVideoProps={{ transparent }}
+          />
+        ) : (
+          <OffthreadVideo
+            src={staticFile(src)}
+            trimBefore={s.srcFrom}
+            trimAfter={s.srcTo}
+            transparent={transparent}
+            muted={muted}
+            style={cover}
+          />
+        )}
       </Sequence>
     ))}
   </>

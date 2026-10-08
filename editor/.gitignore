@@ -4,6 +4,7 @@ public/*
 !public/.gitkeep
 !public/fonts/
 !public/sfx/
+!public/luts/
 __pycache__/
 .venv/
 app/dist/
