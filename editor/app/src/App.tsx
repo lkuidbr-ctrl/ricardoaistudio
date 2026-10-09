@@ -2,7 +2,7 @@ import { Player, type PlayerRef } from "@remotion/player";
 import { LinhaDoTempo } from "./LinhaDoTempo";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { calculateMetadata, defaultProps } from "../../src/Root";
-import type { ShortVideoProps } from "../../src/schema";
+import { DIMENSOES, type ShortVideoProps } from "../../src/schema";
 import { ShortVideo } from "../../src/ShortVideo";
 import { Ajustes } from "./Ajustes";
 import { enviar, get, subir, type Arquivos, type Projeto, type Tarefa } from "./api";
@@ -194,6 +194,8 @@ export const App: React.FC = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props?.video, props?.cuts, props?.captions, props?.person, props?.brollFile, props?.music, props?.brand, props?.audio, props?.preview]);
+
+  const tamanho = DIMENSOES[props?.formato ?? "vertical"] ?? DIMENSOES.vertical;
 
   const mudar = useCallback((parcial: Partial<ShortVideoProps>) => setProps((p) => (p ? { ...p, ...parcial } : p)), []);
 
@@ -569,7 +571,7 @@ export const App: React.FC = () => {
           <section className={`palco${props && duracao ? " com-linha" : ""}`}>
             {props && duracao ? (
               <>
-              <div className="moldura">
+              <div className={`moldura ${props.formato ?? "vertical"}`} style={{ aspectRatio: `${tamanho.width} / ${tamanho.height}` }}>
                 <Player
                   ref={player}
                   component={ShortVideo}
@@ -579,8 +581,8 @@ export const App: React.FC = () => {
                   numberOfSharedAudioTags={16}
                   durationInFrames={duracao}
                   fps={FPS}
-                  compositionWidth={1080}
-                  compositionHeight={1920}
+                  compositionWidth={tamanho.width}
+                  compositionHeight={tamanho.height}
                   controls
                   clickToPlay
                   doubleClickToFullscreen

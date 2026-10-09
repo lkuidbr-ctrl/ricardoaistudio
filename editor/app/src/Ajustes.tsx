@@ -758,6 +758,20 @@ const AbaEfeitos: React.FC<Props> = (p) => {
   const { props, mudar, arquivos, agoraMs, irPara } = p;
   return (
   <>
+    <Secao
+      titulo="Formato do vídeo"
+      dica="O Studio usa o formato em que o vídeo foi gravado. Trocar aqui corta as bordas pelo centro; para virar vertical seguindo o seu rosto, use Converter para vertical (na esquerda)."
+    >
+      <Escolha
+        valor={props.formato ?? "vertical"}
+        opcoes={[
+          { valor: "horizontal", nome: "Deitado 16:9 (YouTube)" },
+          { valor: "vertical", nome: "Em pé 9:16 (Reels, TikTok, Shorts)" },
+          { valor: "quadrado", nome: "Quadrado 1:1 (feed)" },
+        ]}
+        aoMudar={(formato) => mudar({ formato })}
+      />
+    </Secao>
     <SecaoCor props={props} mudar={mudar} />
     <SecaoAnimacoes {...p} />
     <SecaoEfeitosTela {...p} />

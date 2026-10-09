@@ -134,12 +134,13 @@ const Emoji: React.FC<P & { emoji: string }> = ({ emoji }) => {
 // Várias coisas caindo/voando pela tela inteira (dinheiro, confete).
 const Chuva: React.FC<P & { tipo: "dinheiro" | "confete" }> = ({ tipo, cor, duracao }) => {
   const frame = useCurrentFrame();
+  const { width } = useVideoConfig();
   const n = tipo === "dinheiro" ? 16 : 46;
   const cores = [cor, "#FFE600", "#00E5A0", "#FF4D6D", "#4DA3FF", "#FFFFFF"];
   return (
     <AbsoluteFill style={{ overflow: "hidden" }}>
       {Array.from({ length: n }, (_, i) => {
-        const x = random(`x${i}`) * 1080;
+        const x = random(`x${i}`) * width;
         const atraso = random(`a${i}`) * 12;
         const velocidade = 22 + random(`v${i}`) * 20;
         const y = -150 + (frame - atraso) * velocidade;
