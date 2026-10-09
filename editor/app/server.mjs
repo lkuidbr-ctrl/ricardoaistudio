@@ -1564,4 +1564,14 @@ const iniciar = async () => {
   ligar(true);
 };
 
+// Deixa no studio.log o motivo de o motor fechar (para o aviso de erro dizer o que houve).
+process.on("uncaughtException", (e) => {
+  console.error("Erro inesperado no motor:", e?.stack || e);
+  process.exit(1);
+});
+process.on("unhandledRejection", (e) => console.error("Erro inesperado no motor (promessa):", e?.stack || e));
+process.on("exit", (codigo) => {
+  if (codigo !== 0 && codigo !== SAIR_PARA_ATUALIZAR) console.log(`O motor fechou com o código ${codigo}.`);
+});
+
 iniciar();
