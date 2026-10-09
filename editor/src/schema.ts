@@ -3,6 +3,14 @@ import { z } from "zod";
 
 export const captionStyles = ["hormozi", "karaoke", "pop", "neon", "minimal"] as const;
 export const behindAnimations = ["rise", "scale", "slide", "letters"] as const;
+// Formato do vídeo final. O Studio usa o do vídeo gravado (deitado, em pé ou quadrado).
+export const formatos = ["vertical", "horizontal", "quadrado"] as const;
+export const DIMENSOES: Record<(typeof formatos)[number], { width: number; height: number }> = {
+  vertical: { width: 1080, height: 1920 },
+  horizontal: { width: 1920, height: 1080 },
+  quadrado: { width: 1080, height: 1080 },
+};
+
 export const cutTransitions = ["none", "zoom", "flash", "whip", "glitch", "luz", "tremor"] as const;
 export const brollModes = ["full", "pip"] as const;
 export const brollTransitions = ["fade", "slide", "zoom", "glitch"] as const;
@@ -85,6 +93,8 @@ export const brollSchema = z.object({
 });
 
 export const shortVideoSchema = z.object({
+  // vertical 9:16 (Reels/TikTok), horizontal 16:9 (YouTube) ou quadrado 1:1.
+  formato: z.enum(formatos),
   // Arquivos dentro de public/ (ex.: "meu-video.mp4").
   video: z.string(),
   // Cópia leve do vídeo, usada só no preview (a exportação usa sempre o "video"). Vazio = sem cópia.
@@ -156,4 +166,5 @@ export type Cartela = z.infer<typeof cartelaSchema>;
 export type EfeitoTela = z.infer<typeof efeitoTelaSchema>;
 export type Broll = z.infer<typeof brollSchema>;
 export type CutTransition = (typeof cutTransitions)[number];
+export type Formato = (typeof formatos)[number];
 export type CaptionStyle = (typeof captionStyles)[number];

@@ -164,6 +164,8 @@ const configuracoesDoProjeto = (id) => {
   // Clipes gerados pelo clips.py trazem um .props.json com título-gancho etc.
   const base = salvo ?? lerJson(noPublic(irmao(id, ".props.json")), {});
   const cfg = { ...base, video: id };
+  // Vídeo deitado é editado deitado, em pé fica em pé (a não ser que você troque o formato).
+  if (!cfg.formato) cfg.formato = formatoDoVideo(noPublic(id));
   for (const [campo, suf] of Object.entries(GERADOS)) {
     if (cfg[campo] === undefined && fs.existsSync(noPublic(irmao(id, suf)))) cfg[campo] = irmao(id, suf);
   }
@@ -309,6 +311,37 @@ const py = (script) => path.join(EDITOR, "scripts", script);
 const REMOTION_CLI = path.join(EDITOR, "node_modules", "@remotion", "cli", "remotion-cli.js");
 
 // ffprobe/ffmpeg que já vêm com o Remotion (não precisa instalar nada).
+// Formato do vídeo gravado (considera a rotação dos vídeos de celular). Fica guardado por arquivo.
+const formatosLidos = new Map();
+const formatoDoVideo = (abs) => {
+  let mtime = 0;
+  try {
+    mtime = fs.statSync(abs).mtimeMs;
+  } catch {
+    return "vertical";
+  }
+  const chave = `${abs}|${mtime}`;
+  if (formatosLidos.has(chave)) return formatosLidos.get(chave);
+  const r = spawnSync(
+    process.execPath,
+    [REMOTION_CLI, "ffprobe", "-v", "error", "-select_streams", "v:0",
+      "-show_entries", "stream=width,height:stream_side_data=rotation:stream_tags=rotate", "-of", "json", abs],
+    { encoding: "utf-8", windowsHide: true },
+  );
+  let formato = "vertical";
+  try {
+    const st = JSON.parse(r.stdout || "{}").streams?.[0] ?? {};
+    let { width: w, height: h } = st;
+    const rot = Math.abs(Number(st.side_data_list?.find((d) => d.rotation !== undefined)?.rotation ?? st.tags?.rotate ?? 0)) % 180;
+    if (rot === 90) [w, h] = [h, w];
+    if (w && h) formato = w / h > 1.2 ? "horizontal" : w / h < 0.83 ? "vertical" : "quadrado";
+  } catch {
+    // sem conseguir ler, fica o vertical (o formato padrão do Studio)
+  }
+  formatosLidos.set(chave, formato);
+  return formato;
+};
+
 const ffprobe = (abs, entrada) => {
   const r = spawnSync(
     process.execPath,
@@ -338,6 +371,8 @@ const codecLeve = () =>
     ? ["-c:v", "libvpx-vp9", "-crf", "36", "-b:v", "0", "-deadline", "realtime", "-cpu-used", "8", "-c:a", "libopus"]
     : ["-c:v", "libx264", "-crf", "28", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k",
        "-movflags", "+faststart"];
+// Formato escolhido no projeto (para o B-roll buscar vídeos deitados ou em pé).
+const formatoDoProjeto = (abs) => configuracoesDoProjeto(relPublic(abs)).formato || "vertical";
 // Programa que roda cada ferramenta: script Python (padrão) ou um comando próprio.
 const comandoDa = (f, abs, opcoes) => (f.comando ? f.comando(abs, opcoes) : { exe: pythonExe(), args: f.args(abs, opcoes) });
 
@@ -361,7 +396,7 @@ const FERRAMENTAS = {
   },
   broll: {
     rotulo: "B-roll automático",
-    args: (v, o) => [py("broll.py"), v, ...argsIa(o)],
+    args: (v, o) => [py("broll.py"), v, "--formato", formatoDoProjeto(v), ...argsIa(o)],
     campo: "brollFile",
   },
   musica: {
@@ -745,7 +780,7 @@ app.put("/api/legenda", (req, res) => {
 app.post("/api/broll/trocar", (req, res) => {
   const { projeto, indice, pedido, ia } = req.body || {};
   if (!projeto || !fs.existsSync(noPublic(projeto)) || !Number.isInteger(indice)) return res.status(400).json({ erro: "pedido inválido" });
-  const args = [py("broll.py"), noPublic(projeto), "--trocar", String(indice), ...argsIa({ ia })];
+  const args = [py("broll.py"), noPublic(projeto), "--trocar", String(indice), "--formato", formatoDoProjeto(noPublic(projeto)), ...argsIa({ ia })];
   if (typeof pedido === "string" && pedido.trim()) args.push("--pedido", pedido.trim().slice(0, 200));
   const proc = spawn(pythonExe(), args, {
     cwd: EDITOR,

@@ -95,12 +95,23 @@ def por_dicionario(captions: list[dict], intervalo_ms: int = 6000) -> dict:
     return {"cenas": cenas}
 
 
-def escolher_arquivo(video: dict, largura_alvo: int = 1080) -> dict | None:
-    """Entre as versões de um vídeo do Pexels, pega a mp4 mais próxima de 1080 de largura."""
+def escolher_arquivo(video: dict) -> dict | None:
+    """Entre as versões de um vídeo do Pexels, pega a mp4 com o lado menor mais perto de 1080,
+    na mesma orientação do vídeo final."""
     arquivos = [f for f in video.get("video_files", []) if f.get("file_type") == "video/mp4" and f.get("width")]
     if not arquivos:
         return None
-    return min(arquivos, key=lambda f: abs(f["width"] - largura_alvo) + (0 if f["height"] >= f["width"] else 2000))
+
+    def nota(f: dict) -> float:
+        deitado = f["width"] > f["height"]
+        certo = deitado if FORMATO == "horizontal" else (not deitado if FORMATO == "vertical" else True)
+        return abs(min(f["width"], f["height"]) - 1080) + (0 if certo else 2000)
+
+    return min(arquivos, key=nota)
+
+
+ORIENTACAO = {"vertical": "portrait", "horizontal": "landscape", "quadrado": "square"}
+FORMATO = "vertical"  # trocado pelo --formato
 
 
 def buscar_pexels(busca: str, chave: str, minimo_s: float, quantos: int = 4,
@@ -110,7 +121,7 @@ def buscar_pexels(busca: str, chave: str, minimo_s: float, quantos: int = 4,
     evitar = evitar or set()
     # PEXELS_API_URL só serve para testes automatizados (um Pexels falso).
     url = os.environ.get("PEXELS_API_URL", "https://api.pexels.com") + "/videos/search?" + urllib.parse.urlencode(
-        {"query": busca, "orientation": "portrait", "size": "medium", "per_page": 8 + len(evitar)}
+        {"query": busca, "orientation": ORIENTACAO[FORMATO], "size": "medium", "per_page": 8 + len(evitar)}
     )
     req = urllib.request.Request(url, headers={"Authorization": chave, "User-Agent": "ricardoaistudio-editor"})
     try:
@@ -285,7 +296,11 @@ def main() -> None:
     parser.add_argument("--so-planejar", action="store_true", help="só mostra as cenas escolhidas, sem baixar")
     parser.add_argument("--trocar", type=int, help="troca só esta cena (posição na lista, contando do 0)")
     parser.add_argument("--pedido", help="o que você quer ver na cena trocada (em português)")
+    parser.add_argument("--formato", choices=list(ORIENTACAO), default="vertical",
+                        help="formato do vídeo final: busca clipes deitados, em pé ou quadrados")
     args = parser.parse_args()
+    global FORMATO
+    FORMATO = args.formato
 
     captions_file = output_path(args.video, ".captions.json")
     if not captions_file.exists():

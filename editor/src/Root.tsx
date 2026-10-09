@@ -3,7 +3,7 @@ import React from "react";
 import { CalculateMetadataFunction, Composition, staticFile } from "remotion";
 import { brandSchema } from "./brand";
 import { ShortVideo } from "./ShortVideo";
-import { shortVideoSchema, type ShortVideoProps } from "./schema";
+import { DIMENSOES, shortVideoSchema, type ShortVideoProps } from "./schema";
 import { buildTimeline, type CutsFile } from "./timeline";
 
 const FPS = 30;
@@ -14,6 +14,11 @@ const exists = async (file: string) => {
 };
 
 export const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = async ({ props }) => {
+  const tamanho = DIMENSOES[props.formato ?? "vertical"] ?? DIMENSOES.vertical;
+  return { ...tamanho, ...(await duracao(props)) };
+};
+
+const duracao = async (props: ShortVideoProps): Promise<{ durationInFrames: number }> => {
   for (const [label, file] of [
     ["video", props.video],
     ["preview", props.preview],
@@ -54,6 +59,7 @@ export const calculateMetadata: CalculateMetadataFunction<ShortVideoProps> = asy
 };
 
 export const defaultProps: ShortVideoProps = {
+  formato: "vertical",
   video: "video.mp4",
   captions: "video.captions.json",
   person: "video.person.webm",
