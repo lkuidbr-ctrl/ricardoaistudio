@@ -18,7 +18,18 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
+# Outro Studio já está respondendo? (ex.: foi aberto de novo e assumiu o lugar deste)
+function Studio-Respondendo {
+    try {
+        Invoke-WebRequest -Uri 'http://127.0.0.1:3210/api/versao' -UseBasicParsing -TimeoutSec 3 | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 $primeiraVez = $true
+$tentativas = 0
 while ($true) {
     if (-not $primeiraVez) {
         # Depois de uma atualização a janela do Studio continua aberta e recarrega sozinha.
@@ -29,12 +40,21 @@ while ($true) {
     & node (Join-Path $Editor 'app\server.mjs') *>> $Log
     $codigo = $LASTEXITCODE
     $primeiraVez = $false
+    "==== $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') o motor fechou (código $codigo)" | Out-File $Log -Append -Encoding unicode
 
     if ($codigo -eq 42) {
         & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Editor 'instalar.ps1') -Atualizacao *>> $Log
         continue
     }
     if ($codigo -ne 0 -and ((Get-Date) - $inicio).TotalSeconds -lt 60) {
+        # Outro Studio assumiu o lugar (aberto de novo pelo atalho): está tudo certo.
+        if (Studio-Respondendo) { break }
+        # Fechou logo no começo sem motivo claro: tenta abrir mais uma vez antes de avisar.
+        $tentativas++
+        if ($tentativas -le 1) {
+            Start-Sleep -Seconds 2
+            continue
+        }
         $fim = (Get-Content $Log -Tail 15 -ErrorAction SilentlyContinue) -join "`n"
         Mostrar-Erro 'Ricardo AI Studio não abriu' "O Studio não conseguiu abrir. Detalhes:`n`n$fim`n`nTire um print e mande para o Claude."
     }
