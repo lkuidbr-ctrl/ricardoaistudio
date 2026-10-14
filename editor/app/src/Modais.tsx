@@ -545,6 +545,7 @@ export const ModalVideos: React.FC<{ fechar: () => void; editar: (projeto: strin
 }) => {
   const [lista, setLista] = useState<Exportado[] | null>(null);
   const [erro, setErro] = useState("");
+  const [pasta, setPasta] = useState("");
   const carregar = () => get<Exportado[]>("/api/exportados").then(setLista).catch((e) => setErro((e as Error).message));
   useEffect(() => {
     carregar();
@@ -558,10 +559,26 @@ export const ModalVideos: React.FC<{ fechar: () => void; editar: (projeto: strin
         <p className="dica" style={{ margin: 0 }}>
           Todos os vídeos que você exportou. Eles ficam na pasta <b>editor\out</b>.
         </p>
-        <button className="botao secundario pequeno" onClick={() => enviar("POST", "/api/exportados/pasta", {}).catch(() => {})}>
+        <button
+          className="botao secundario pequeno"
+          onClick={() =>
+            enviar<{ pasta: string }>("POST", "/api/exportados/pasta", {})
+              .then((r) => setPasta(r.pasta))
+              .catch((e) => setPasta(`Não deu para abrir: ${(e as Error).message}`))
+          }
+        >
           📂 Abrir a pasta
         </button>
       </div>
+      {pasta ? (
+        <p className="dica pasta-aberta">
+          A pasta foi aberta no Explorador. Se ela não aparecer na frente, clique no ícone de pasta piscando na barra de
+          tarefas. Endereço: <code>{pasta}</code>{" "}
+          <button className="botao pequeno fantasma" onClick={() => navigator.clipboard?.writeText(pasta).catch(() => {})}>
+            Copiar endereço
+          </button>
+        </p>
+      ) : null}
       {erro ? <p className="erro">{erro}</p> : null}
       {lista && lista.length === 0 ? <p className="vazio-lista">Nenhum vídeo exportado ainda. Clique em "Exportar vídeo" no topo.</p> : null}
       <div className="videos">
