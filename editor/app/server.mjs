@@ -592,7 +592,9 @@ const rodarAutomatico = (t, projeto, opcoes) => {
       // B-roll e música são extras: se falharem (internet, Pexels...), o resto do vídeo continua pronto.
       aoFalhar: passos[i] === "broll" || passos[i] === "musica"
         ? () => {
-            t.aviso = `${passos[i] === "broll" ? "o B-roll automático" : "a escolha da música"} não deu certo desta vez (veja os detalhes). O resto ficou pronto.`;
+            // Mostra o motivo (última linha útil do script), não só "veja os detalhes".
+            const motivo = [...t.linhas].reverse().find((l) => /\S/.test(l) && !/^\s*(Traceback|File "|\^|━━|▶)/.test(l)) || "";
+            t.aviso = `${passos[i] === "broll" ? "o B-roll automático" : "a escolha da música"} não deu certo desta vez${motivo ? `: ${motivo.trim().slice(0, 220)}` : " (veja os detalhes)"}. O resto ficou pronto.`;
             setImmediate(() => proximo(i + 1));
             return true;
           }
@@ -1122,9 +1124,18 @@ app.post("/api/exportados/pasta", (req, res) => {
   } catch {
     /* sem o arquivo: abre só a pasta */
   }
-  if (WIN) spawn("explorer.exe", alvo === OUT ? [OUT] : [`/select,${alvo}`], { detached: true, stdio: "ignore" }).unref();
-  else if (process.platform === "darwin") spawn("open", alvo === OUT ? [OUT] : ["-R", alvo], { detached: true, stdio: "ignore" }).unref();
-  else spawn("xdg-open", [OUT], { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
+  // Sem o "error" tratado, um Explorador que não abre derrubaria o motor inteiro.
+  const abrir = (cmd, args, seFalhar) =>
+    spawn(cmd, args, { detached: true, stdio: "ignore" })
+      .on("error", () => seFalhar?.())
+      .unref();
+  if (WIN) {
+    const caminho = (process.env.SystemRoot || "C:\\Windows") + "\\explorer.exe";
+    abrir(fs.existsSync(caminho) ? caminho : "explorer.exe", alvo === OUT ? [OUT] : [`/select,${alvo}`], () =>
+      abrir("cmd", ["/c", "start", "", OUT]),
+    );
+  } else if (process.platform === "darwin") abrir("open", alvo === OUT ? [OUT] : ["-R", alvo]);
+  else abrir("xdg-open", [OUT]);
   res.json({ ok: true, pasta: OUT });
 });
 
