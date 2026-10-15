@@ -35,19 +35,25 @@ def avisar_sem_ia(erro: IaIndisponivel) -> None:
     print(f"AVISO: {erro} Desta vez usei o modo sem IA.")
 
 
-PADRAO_OLLAMA = "qwen2.5:7b"
+# Qwen3 (Alibaba): grátis, roda no computador; o 8B cabe em 16 GB de memória.
+PADRAO_OLLAMA = "qwen3:8b"
+RESERVA_OLLAMA = "qwen2.5:7b"  # o modelo antigo do Studio, se o novo ainda não foi baixado
+# DeepSeek (China): pela internet, quase de graça (centavos por vídeo).
+PADRAO_DEEPSEEK = "deepseek-flash"
 PADRAO_CLAUDE = "claude-opus-5"
 
 
 def add_ia_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--ia",
-        choices=["claude", "ollama", "dicionario"],
+        choices=["claude", "deepseek", "ollama", "dicionario"],
         default="claude",
-        help="claude (padrão; login com `ant auth login`), ollama (local, grátis) ou dicionario (sem IA, grátis)",
+        help="claude (padrão), deepseek (pela internet, quase grátis; chave em DEEPSEEK_API_KEY), "
+             "ollama (local, grátis) ou dicionario (sem IA, grátis)",
     )
     parser.add_argument(
-        "--modelo", help=f"modelo do Ollama (padrão {PADRAO_OLLAMA}) ou do Claude (padrão {PADRAO_CLAUDE})"
+        "--modelo", help=f"modelo do Ollama (padrão {PADRAO_OLLAMA}), do DeepSeek (padrão {PADRAO_DEEPSEEK}) "
+                         f"ou do Claude (padrão {PADRAO_CLAUDE})"
     )
 
 
@@ -55,32 +61,136 @@ def pedir_json(args: argparse.Namespace, instrucoes: str, texto: str, schema: di
     """Pede à IA escolhida (--ia ollama/claude) uma resposta JSON no formato do schema."""
     if args.ia == "ollama":
         return por_ollama(instrucoes, texto, schema, args.modelo or PADRAO_OLLAMA)
+    if args.ia == "deepseek":
+        return por_deepseek(instrucoes, texto, schema, args.modelo or PADRAO_DEEPSEEK)
     if args.ia == "claude":
         return por_claude(instrucoes, texto, schema, args.modelo or PADRAO_CLAUDE)
     raise ValueError("o modo dicionario não usa IA")
 
 
-def por_ollama(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
+def so_texto(texto) -> str:
+    """As IAs sem visão recebem só a parte de texto (o B-roll manda imagens só para o Claude)."""
+    if isinstance(texto, str):
+        return texto
+    return "\n".join(p.get("text", "") for p in texto if isinstance(p, dict) and p.get("type") == "text")
+
+
+def completar(schema: dict, dados):
+    """IA local às vezes esquece um campo: completa com vazio para o script não quebrar."""
+    if schema.get("type") != "object" or not isinstance(dados, dict):
+        return dados
+    vazio = {"array": [], "string": "", "integer": 0, "number": 0, "boolean": False, "object": {}}
+    for chave, sub in schema.get("properties", {}).items():
+        if chave not in dados:
+            dados[chave] = vazio.get(sub.get("type"), None)
+        elif sub.get("type") == "array" and isinstance(dados[chave], list) and "items" in sub:
+            dados[chave] = [completar(sub["items"], x) for x in dados[chave] if not (sub["items"].get("type") == "object" and not isinstance(x, dict))]
+    return dados
+
+
+def _ollama_chat(modelo: str, instrucoes: str, texto: str, schema: dict) -> dict:
     body = {
         "model": modelo,
         "stream": False,
         "format": schema,
-        "options": {"temperature": 0.3},
-        "messages": [{"role": "system", "content": instrucoes}, {"role": "user", "content": texto}],
+        # O Qwen3 "pensa" antes de responder: aqui não precisa e só deixaria mais lento.
+        "think": False,
+        "options": {"temperature": 0.3, "num_ctx": 8192},
+        "messages": [{"role": "system", "content": instrucoes}, {"role": "user", "content": so_texto(texto)}],
     }
     req = urllib.request.Request(
         "http://localhost:11434/api/chat",
         data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json"},
     )
+    with urllib.request.urlopen(req, timeout=1200) as r:
+        return completar(schema, json.loads(json.loads(r.read())["message"]["content"]))
+
+
+def por_ollama(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
     try:
-        with urllib.request.urlopen(req, timeout=600) as r:
-            return json.loads(json.loads(r.read())["message"]["content"])
+        try:
+            return _ollama_chat(modelo, instrucoes, texto, schema)
+        except urllib.error.HTTPError as e:
+            # Modelo novo ainda não baixado: usa o antigo, se ele existir.
+            if e.code == 404 and modelo == PADRAO_OLLAMA:
+                print(f"(o modelo {modelo} ainda não foi baixado; usando o {RESERVA_OLLAMA}. "
+                      f"Para o melhor resultado rode: ollama pull {modelo})")
+                return _ollama_chat(RESERVA_OLLAMA, instrucoes, texto, schema)
+            raise
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise IaIndisponivel(f"O Ollama está aberto, mas falta baixar a IA: rode `ollama pull {modelo}` no Prompt de Comando.")
+        raise IaIndisponivel(f"O Ollama deu erro ({e.code}). Feche e abra o Ollama de novo.")
     except urllib.error.URLError as e:
         raise IaIndisponivel(
-            f"Não consegui falar com o Ollama ({e}). Instale em https://ollama.com, "
+            f"Não consegui falar com o Ollama ({e.reason}). Instale em https://ollama.com, "
             f"rode `ollama pull {modelo}` e deixe o Ollama aberto."
         )
+    except (json.JSONDecodeError, KeyError, TypeError):
+        raise IaIndisponivel("O Ollama respondeu num formato errado desta vez.")
+
+
+def por_deepseek(instrucoes: str, texto: str, schema: dict, modelo: str) -> dict:
+    """DeepSeek pela internet (formato da OpenAI). Ele não segue um schema à risca: o formato vai
+    no pedido, com exemplo, e o que faltar é completado."""
+    chave = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not chave:
+        raise IaIndisponivel("Falta a chave do DeepSeek: cole em Configurações (platform.deepseek.com > API keys).")
+    sistema = (
+        f"{instrucoes}\n\nResponda SOMENTE com um objeto JSON válido que siga este JSON Schema "
+        f"(use exatamente esses nomes de campos):\n{json.dumps(schema, ensure_ascii=False)}"
+    )
+    body = {
+        "model": modelo,
+        "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": so_texto(texto)}],
+        "response_format": {"type": "json_object"},
+        "thinking": {"type": "disabled"},
+        "temperature": 0.3,
+        "max_tokens": 8000,
+        "stream": False,
+    }
+    url = os.environ.get("DEEPSEEK_API_URL", "https://api.deepseek.com") + "/chat/completions"
+
+    def enviar(corpo: dict) -> dict:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(corpo).encode(),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {chave}"},
+        )
+        with urllib.request.urlopen(req, timeout=300) as r:
+            return json.loads(r.read())
+
+    for tentativa in range(3):
+        try:
+            resposta = enviar(body)
+        except urllib.error.HTTPError as e:
+            detalhe = e.read().decode("utf-8", "replace")[:300]
+            if e.code == 400 and "thinking" in detalhe and "thinking" in body:
+                body.pop("thinking")  # versão da API que não conhece esse campo
+                continue
+            if e.code == 401:
+                raise IaIndisponivel("A chave do DeepSeek não foi aceita. Confira em Configurações.")
+            if e.code == 402:
+                raise IaIndisponivel("A conta do DeepSeek está sem saldo: adicione em platform.deepseek.com > Top up.")
+            if e.code in (429, 500, 502, 503) and tentativa < 2:
+                import time
+                time.sleep(3 * (tentativa + 1))
+                continue
+            raise IaIndisponivel(f"O DeepSeek deu erro ({e.code}): {detalhe}")
+        except urllib.error.URLError as e:
+            raise IaIndisponivel(f"Não consegui falar com o DeepSeek ({e.reason}). Confira a internet.")
+        conteudo = (resposta.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+        uso = resposta.get("usage") or {}
+        if uso:
+            print(f"(DeepSeek: {uso.get('prompt_tokens', 0)} tokens de entrada, {uso.get('completion_tokens', 0)} de saída)")
+        try:
+            return completar(schema, json.loads(conteudo))
+        except json.JSONDecodeError:
+            if tentativa < 2:
+                continue  # às vezes vem vazio: pede de novo
+            raise IaIndisponivel("O DeepSeek respondeu num formato errado desta vez.")
+    raise IaIndisponivel("O DeepSeek não respondeu direito desta vez.")
 
 
 def precisa_workspace(erro: Exception) -> bool:

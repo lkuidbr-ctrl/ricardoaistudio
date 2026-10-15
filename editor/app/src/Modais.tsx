@@ -207,6 +207,8 @@ export const ModalConfig: React.FC<{
   const [claude, setClaude] = useState<{ instalado: boolean; texto: string } | null>(null);
   const [cfg, setCfg] = useState<{
     temPexels: boolean;
+    temDeepseek?: boolean;
+    deepseekFinal?: string;
     temClaude: boolean;
     claudeFinal: string;
     claudeModelo: string;
@@ -218,6 +220,16 @@ export const ModalConfig: React.FC<{
   const [teste, setTeste] = useState<{ ok: boolean; motivo?: string; aviso?: string; pedeWorkspace?: boolean } | "testando" | null>(null);
   const [workspace, setWorkspace] = useState("");
   const temPexels = Boolean(cfg?.temPexels);
+  const [chaveDeepseek, setChaveDeepseek] = useState("");
+  const [testeIa, setTesteIa] = useState<{ ok: boolean; modelo?: string; motivo?: string } | "testando" | null>(null);
+  const testarIa = async (qual: "deepseek" | "ollama") => {
+    setTesteIa("testando");
+    try {
+      setTesteIa(await enviar<{ ok: boolean; modelo?: string; motivo?: string }>("POST", "/api/ia/testar", { ia: qual }));
+    } catch (e) {
+      setTesteIa({ ok: false, motivo: (e as Error).message });
+    }
+  };
 
   const atualizar = () => {
     get<{ instalado: boolean; texto: string }>("/api/claude").then(setClaude).catch(() => {});
@@ -281,7 +293,8 @@ export const ModalConfig: React.FC<{
         <p className="dica">Usada em legendas com emojis, B-roll automático, clipes e dublagem.</p>
         <select value={ia} onChange={(e) => setIa(e.target.value as Ia)}>
           <option value="claude">Claude (melhor resultado; usa créditos da API, pagos à parte)</option>
-          <option value="ollama">Ollama (IA local e grátis; precisa instalar o Ollama)</option>
+          <option value="deepseek">DeepSeek (pela internet; centavos por vídeo; não enxerga imagens)</option>
+          <option value="ollama">Qwen3 no Ollama (no seu computador, grátis e mais lento; precisa instalar o Ollama)</option>
           <option value="dicionario">Sem IA (grátis, resultados simples)</option>
         </select>
       </section>
@@ -385,6 +398,57 @@ export const ModalConfig: React.FC<{
         </label>
       </section>
 
+
+      <section className="secao">
+        <header><h3>DeepSeek (opcional)</h3>{cfg?.temDeepseek ? <span className="selo ok">✓ chave ...{cfg.deepseekFinal}</span> : null}</header>
+        <p className="dica">
+          IA chinesa pela internet, bem mais barata que o Claude (centavos por vídeo), mas não olha as imagens do B-roll. Crie a
+          chave em{" "}
+          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">platform.deepseek.com → API keys</a>, ponha
+          uns dólares em Top up e cole aqui. O texto dos vídeos vai para os servidores deles, na China.
+        </p>
+        <div className="linha-form">
+          <input
+            type="password"
+            placeholder={cfg?.temDeepseek ? `•••••••• (já salva, termina em ${cfg.deepseekFinal})` : "sk-..."}
+            value={chaveDeepseek}
+            onChange={(e) => {
+              setChaveDeepseek(e.target.value);
+              setTesteIa(null);
+            }}
+          />
+          <button
+            className="botao primario"
+            disabled={!chaveDeepseek.trim()}
+            onClick={async () => {
+              await enviar("PUT", "/api/config", { deepseekKey: chaveDeepseek });
+              setChaveDeepseek("");
+              atualizar();
+              testarIa("deepseek");
+            }}
+          >
+            Salvar e testar
+          </button>
+        </div>
+        <div className="linha-form">
+          {cfg?.temDeepseek ? (
+            <button className="botao secundario pequeno" disabled={testeIa === "testando"} onClick={() => testarIa("deepseek")}>
+              Testar DeepSeek
+            </button>
+          ) : null}
+          <button className="botao secundario pequeno" disabled={testeIa === "testando"} onClick={() => testarIa("ollama")}>
+            Testar Qwen3 (Ollama)
+          </button>
+        </div>
+        {testeIa === "testando" ? <p className="dica">Testando... (o Ollama pode levar até 1 minuto na primeira vez)</p> : null}
+        {testeIa && testeIa !== "testando" ? (
+          testeIa.ok ? (
+            <p className="ok-texto">Funcionando ({testeIa.modelo}). Escolha a IA em Inteligência, acima.</p>
+          ) : (
+            <p className="alerta">{testeIa.motivo}</p>
+          )
+        ) : null}
+      </section>
 
       <section className="secao">
         <header><h3>Pexels (B-roll automático)</h3>{temPexels ? <span className="selo ok">✓ configurado</span> : null}</header>

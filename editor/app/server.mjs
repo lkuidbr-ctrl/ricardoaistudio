@@ -79,6 +79,7 @@ const envDasChaves = () => {
   return {
     ...(c.pexelsKey ? { PEXELS_API_KEY: c.pexelsKey } : {}),
     ...(c.claudeKey ? { ANTHROPIC_API_KEY: c.claudeKey } : {}),
+    ...(c.deepseekKey ? { DEEPSEEK_API_KEY: c.deepseekKey } : {}),
     // Chave da organização (sem workspace): a API pede o ID do workspace em cada pedido.
     ...(c.claudeWorkspace ? { ANTHROPIC_WORKSPACE_ID: c.claudeWorkspace } : {}),
     ...(sugerido ? { ANTHROPIC_WORKSPACE_ID_SUGERIDO: sugerido } : {}),
@@ -229,7 +230,7 @@ const DIAGNOSTICOS = [
     "Sua conta da API do Claude está sem créditos (a assinatura Pro/Max não inclui a API). Adicione créditos em platform.claude.com > Billing ou troque a Inteligência para \"Sem IA\"."],
   [/Falta a chave do Claude|não está logado no Claude|recusou (o login|a chave)/i, "Cole a sua chave da API do Claude em Configurações (canto de cima) e clique em Salvar e testar."],
   [/PEXELS_API_KEY|Chave do Pexels inválida/i, "Cole a sua chave grátis do Pexels em Configurações e tente de novo."],
-  [/Não consegui falar com o Ollama/i, "O Ollama não está aberto. Abra o Ollama ou troque a Inteligência para Claude."],
+  [/Não consegui falar com o Ollama/i, "O Ollama não está aberto. Abra o Ollama ou troque a Inteligência para Claude ou DeepSeek."],
   [/WinError 126|DLL load failed|Error loading .*\.dll|vcruntime|msvcp140/i,
     "Falta um componente do Windows (Microsoft Visual C++). Rode o instalar-windows.bat de novo: ele instala e conserta."],
   [/No module named|ModuleNotFoundError|não é reconhecido como um comando|ENOENT/i, "A instalação está incompleta. Rode o instalar-windows.bat de novo."],
@@ -1373,6 +1374,8 @@ app.get("/api/config", (_req, res) => {
     temPexels: Boolean(c.pexelsKey || process.env.PEXELS_API_KEY),
     temClaude: Boolean(c.claudeKey),
     claudeFinal: c.claudeKey ? c.claudeKey.slice(-4) : "",
+    temDeepseek: Boolean(c.deepseekKey),
+    deepseekFinal: c.deepseekKey ? c.deepseekKey.slice(-4) : "",
     claudeWorkspace: c.claudeWorkspace || "",
     // A chave já passou no teste? (o app só pede a chave de novo se ela falhar)
     claudeOk: c.claudeOk === true,
@@ -1383,6 +1386,10 @@ app.put("/api/config", (req, res) => {
   const c = config();
   const b = req.body || {};
   if (typeof b.pexelsKey === "string") c.pexelsKey = b.pexelsKey.trim();
+  if (typeof b.deepseekKey === "string") {
+    if (b.deepseekKey.trim()) c.deepseekKey = b.deepseekKey.trim();
+    else delete c.deepseekKey;
+  }
   if (typeof b.claudeKey === "string") {
     c.claudeKey = b.claudeKey.trim();
     delete c.claudeWorkspace; // chave nova: o teste descobre de novo se precisa de workspace
@@ -1399,6 +1406,22 @@ app.put("/api/config", (req, res) => {
 });
 
 // Testa se o Claude funciona (chave válida e com créditos) com um pedido mínimo.
+// Testa o DeepSeek ou o Ollama (botões "Testar" das Configurações).
+app.post("/api/ia/testar", (req, res) => {
+  const ia = req.body?.ia === "ollama" ? "ollama" : "deepseek";
+  const r = spawnSync(pythonExe(), [py("testar_ia.py"), "--ia", ia], {
+    cwd: EDITOR,
+    encoding: "utf-8",
+    timeout: ia === "ollama" ? 300000 : 60000,
+    windowsHide: true,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8", ...envDasChaves() },
+  });
+  const linhas = `${r.stdout || ""}\n${r.stderr || ""}`.trim().split(/\r?\n/).filter(Boolean);
+  const ultima = [...linhas].reverse().find((l) => /^(OK|ERRO:)/.test(l)) || linhas.pop() || "sem resposta";
+  if (ultima.startsWith("OK")) return res.json({ ok: true, modelo: ultima.split(" ")[1] });
+  res.json({ ok: false, motivo: r.error?.code === "ETIMEDOUT" ? "Demorou demais para responder." : ultima.replace(/^ERRO:\s*/, "") });
+});
+
 app.post("/api/claude/testar", (_req, res) => {
   const r = spawnSync(pythonExe(), [py("testar_claude.py")], {
     cwd: EDITOR,
