@@ -2,9 +2,14 @@
 
 import argparse
 import json
+import logging
 import os
 import urllib.error
 import urllib.request
+
+# O SDK avisa que a ANTHROPIC_API_KEY tem prioridade sobre o login automático: no Studio a
+# chave é sempre a das Configurações, então o aviso só confunde quem lê os detalhes.
+logging.getLogger("anthropic.lib.credentials._auth").setLevel(logging.ERROR)
 
 class IaIndisponivel(Exception):
     """A IA escolhida não pode ser usada agora (sem créditos, sem login, Ollama fechado...).

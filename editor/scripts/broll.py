@@ -75,6 +75,19 @@ BUSCAS = {
     "tempo": "clock time", "estud": "studying books", "aprend": "learning student", "ideia": "light bulb idea",
     "sucesso": "success celebration", "meta": "goal target", "cresc": "growth plant", "famil": "happy family",
     "amig": "friends laughing", "cafe": "coffee morning", "natureza": "nature forest", "praia": "beach sunset",
+    # Saúde e bem-estar (muito comum nos vídeos de médicos e clientes da área).
+    "menopausa": "mature woman thoughtful", "climater": "mature woman thoughtful", "hormon": "doctor talking patient",
+    "reposic": "doctor prescription patient", "tratament": "doctor consultation", "medic": "doctor consultation",
+    "doutor": "doctor consultation", "consult": "doctor consultation", "exame": "medical exam", "sintoma": "woman feeling unwell",
+    "dor": "woman headache pain", "sono": "woman insomnia bed night", "dormir": "woman insomnia bed night",
+    "insonia": "woman insomnia bed night", "calor": "woman hot flash fan", "fogach": "woman hot flash fan",
+    "coracao": "heart health", "cardio": "heart health", "arteria": "heart health", "trombose": "medical exam",
+    "cancer": "breast cancer awareness", "mama": "breast cancer awareness", "pele": "skin care woman",
+    "cabelo": "woman hair care", "peso": "woman weight scale", "emagrec": "healthy food salad", "dieta": "healthy food salad",
+    "ansiedade": "woman anxiety stress", "estresse": "woman anxiety stress", "humor": "woman mood swings",
+    "mulher": "woman portrait", "mulheres": "group of women smiling", "fase": "woman walking nature",
+    "vida": "happy woman lifestyle", "remedio": "medicine pills", "vitamina": "vitamins supplements",
+    "gravid": "pregnant woman", "bebe": "newborn baby", "crianc": "children playing", "idos": "elderly couple",
 }
 
 
@@ -320,7 +333,8 @@ def main() -> None:
         trocar(args, captions, chave)
         return
 
-    if args.ia == "dicionario":
+    sem_ia = args.ia == "dicionario"
+    if sem_ia:
         plano = por_dicionario(captions)
     else:
         texto = "\n".join(f"{i} [{c['startMs'] / 1000:.1f}]: {c['text'].strip()}" for i, c in enumerate(captions))
@@ -328,6 +342,7 @@ def main() -> None:
             plano = pedir_json(args, INSTRUCOES, texto, SCHEMA)
         except IaIndisponivel as e:
             avisar_sem_ia(e)
+            sem_ia = True
             plano = por_dicionario(captions)
 
     cenas = sorted(
@@ -335,7 +350,10 @@ def main() -> None:
         key=lambda c: c["indice"],
     )
     if not cenas:
-        raise SystemExit("Nenhuma cena de B-roll encontrada.")
+        # Não é erro: o vídeo fica sem B-roll (com a IA, ela acha cenas em qualquer assunto).
+        print("AVISO: não achei momentos para B-roll neste vídeo"
+              + (" no modo sem IA (ele só reconhece algumas palavras)." if sem_ia else "."))
+        return
 
     pasta = args.video.parent / "broll"
     pasta.mkdir(exist_ok=True)
