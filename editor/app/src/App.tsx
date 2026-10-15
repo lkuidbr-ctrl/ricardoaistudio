@@ -359,7 +359,8 @@ export const App: React.FC = () => {
   // Edição automática de um vídeo novo. Sem chave do Claude, pede a chave antes
   // (ou deixa seguir no modo simples, sem IA).
   const editarAutomatico = (projeto: string) => {
-    if (!temChave) {
+    // Só o Claude precisa da chave dele; DeepSeek, Qwen3 (Ollama) e Sem IA seguem direto.
+    if (!temChave && ia === "claude") {
       esperandoChave.current = projeto;
       setModal("chave");
       return;
@@ -535,7 +536,7 @@ export const App: React.FC = () => {
       ) : (
         <main className="area">
           <aside className="coluna esquerda">
-            {temChave === false ? (
+            {temChave === false && ia === "claude" ? (
               <button className="faixa-chave" onClick={() => setModal("chave")}>
                 ⚠ A IA do Claude ainda não está funcionando. <b>Clique aqui para resolver.</b>
               </button>

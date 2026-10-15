@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import type { Arquivos, Tarefa } from "./api";
 
-export type Ia = "claude" | "ollama" | "dicionario";
+export type Ia = "claude" | "deepseek" | "ollama" | "dicionario";
 
 type Ferramenta = {
   id: string;
@@ -246,7 +246,8 @@ export const Ferramentas: React.FC<{
         <span>Inteligência</span>
         <select value={ia} onChange={(e) => setIa(e.target.value as Ia)}>
           <option value="claude">Claude (créditos da API)</option>
-          <option value="ollama">Ollama (local, grátis)</option>
+          <option value="deepseek">DeepSeek (quase grátis)</option>
+          <option value="ollama">Qwen3 no Ollama (local, grátis)</option>
           <option value="dicionario">Sem IA (grátis)</option>
         </select>
       </div>

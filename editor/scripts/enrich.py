@@ -139,12 +139,17 @@ DICIONARIO = {
     "video": "🎬", "videos": "🎬", "celular": "📱", "instagram": "📸", "tiktok": "🎵", "youtube": "▶️",
     "trabalh": "💼", "empresa": "🏢", "negocio": "💼", "cliente": "🤝", "comida": "🍔", "academia": "💪",
     "treino": "💪", "forte": "💪", "saude": "🩺", "casa": "🏠", "carro": "🚗", "viagem": "✈️", "mundo": "🌎",
+    "menopausa": "🌸", "hormon": "💊", "reposic": "💊", "tratament": "💊", "remedio": "💊", "medic": "🩺",
+    "sintoma": "⚠️", "doenc": "🩺", "cancer": "🎗️", "coracao": "❤️", "sono": "😴", "dormir": "😴",
+    "insonia": "😴", "mulher": "👩", "mulheres": "👩", "calor": "🥵", "estresse": "😤", "ansiedade": "😰",
     "ola": "👋", "oi": "👋", "obrigad": "🙏", "bora": "🚀", "segue": "➕", "curte": "👍", "comenta": "💬",
 }
 PALAVRAS_FRACAS = set(
     "a o as os um uma uns umas de da do das dos em na no nas nos por para pra pro com sem e ou mas que "
     "se eu tu ele ela nos vos eles elas me te lhe isso isto esse essa este esta aquele aquela ja "
-    "muito mais menos bem so tambem ai la aqui como quando onde qual quem ne tipo entao vou vai sou".split()
+    "muito mais menos bem so tambem ai la aqui como quando onde qual quem ne tipo entao vou vai sou "
+    "esta estao estava estavam tem tinha tiveram teve ter ser foi era sao porque pela pelo pelas pelos "
+    "nesta neste nessa nesse desta deste dessa desse todo toda todos todas pode podem precisa".split()
 )
 
 
@@ -263,8 +268,17 @@ def main() -> None:
             avisar_sem_ia(e)
             result = por_dicionario(words)
 
-    destaques = {i for i in result["destaques"] if 0 <= i < len(captions)}
-    emojis = {e["indice"]: e["emoji"].strip() for e in result["emojis"] if 0 <= e["indice"] < len(captions) and e["emoji"].strip()}
+    # Filtro para IAs menores (Qwen no Ollama, DeepSeek): nada de destaque ou emoji em palavra fraca
+    # ("a", "que", "mas"...), no máximo 1 emoji a cada 6 palavras e destaques em até 1/4 das palavras.
+    fraca = lambda i: normalize(words[i]) in PALAVRAS_FRACAS or not normalize(words[i])
+    destaques = sorted({i for i in result["destaques"] if 0 <= i < len(captions) and not fraca(i)})
+    destaques = set(destaques[: max(1, len(captions) // 4)])
+    emojis, ultimo = {}, -99
+    for e in sorted(result["emojis"], key=lambda e: e.get("indice", -1)):
+        i, emoji = e.get("indice", -1), str(e.get("emoji", "")).strip()
+        if 0 <= i < len(captions) and emoji and not fraca(i) and i - ultimo >= 6:
+            emojis[i] = emoji
+            ultimo = i
     for i, c in enumerate(captions):
         c.pop("highlight", None)
         c.pop("emoji", None)

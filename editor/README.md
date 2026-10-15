@@ -56,7 +56,7 @@ Outras opções:
 
 Em **Configurações** você cola a **chave da API do Claude** (com o botão "Testar", que
 confere se ela funciona e se tem créditos), escolhe o modelo (Opus, Sonnet ou Haiku, do melhor
-ao mais barato), cola a chave do Pexels e escolhe a IA (Claude, Ollama local ou sem IA).
+ao mais barato), cola a chave do Pexels e escolhe a IA (Claude, DeepSeek, Qwen3 no Ollama ou sem IA).
 As chaves ficam só no seu computador (`editor/app/config.json`). A API do Claude tem créditos
 próprios, comprados em platform.claude.com; a assinatura Pro/Max não vale para ela. Sem
 créditos, o Studio usa o modo sem IA sozinho e avisa. Tudo o que você ajusta é salvo sozinho.
@@ -170,7 +170,7 @@ qualquer script. Sem internet ou sem login? Use `--ia ollama` ou `--ia dicionari
 4. **Emojis e destaques** (opcional):
    ```bash
    python scripts/enrich.py public/video.mp4                   # Claude (padrão)
-   python scripts/enrich.py public/video.mp4 --ia ollama       # IA local grátis (instale o Ollama e rode `ollama pull qwen2.5:7b`)
+   python scripts/enrich.py public/video.mp4 --ia ollama       # IA local grátis (instale o Ollama e rode `ollama pull qwen3:8b`)
    python scripts/enrich.py public/video.mp4 --ia dicionario   # dicionário: grátis e instantâneo
    ```
    Isso marca as palavras de destaque e os emojis dentro do `video.captions.json`. Dá para
@@ -326,9 +326,10 @@ scripts/
   voz.py                narração de roteiro e dublagem (Kokoro)
   fonemas.py            pronúncia para a voz (espeak-ng; GPL-3.0, roda como programa à parte)
   cut.py                silêncios e "éé" -> trechos que ficam (video.cuts.json)
-  enrich.py             destaques e emojis (Claude, Ollama ou dicionário)
+  enrich.py             destaques e emojis (Claude, DeepSeek, Ollama ou dicionário)
   broll.py              B-roll automático com clipes grátis do Pexels
-  _ia.py                chamadas de IA compartilhadas (Claude via login OAuth / Ollama)
+  _ia.py                chamadas de IA compartilhadas (Claude, DeepSeek e Ollama)
+  testar_ia.py          testa o DeepSeek ou o Ollama (botões das Configurações)
   gerar_sfx.py          sintetiza os efeitos sonoros de public/sfx/ (sem direito autoral)
   voz_clonada.py        voz clonada (Chatterbox, MIT) para a dublagem com a voz de quem fala
   musica.py             Minhas músicas: ritmo de cada música e escolha da música de cada vídeo
